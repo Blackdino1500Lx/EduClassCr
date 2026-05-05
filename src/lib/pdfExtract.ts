@@ -1,12 +1,11 @@
 import * as pdfjsLib from 'pdfjs-dist'
 
-// Worker necesario para pdfjs
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`
+// Usar el worker bundleado directamente con Vite
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.mjs',
+  import.meta.url
+).toString()
 
-/**
- * Descarga un PDF desde una URL pública y extrae su texto completo.
- * Retorna el texto de todas las páginas concatenado.
- */
 export async function extractTextFromPdfUrl(url: string): Promise<string> {
   const response = await fetch(url)
   const buffer   = await response.arrayBuffer()
