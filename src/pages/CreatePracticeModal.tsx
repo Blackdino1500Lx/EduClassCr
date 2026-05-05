@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Lesson, Student, Question } from '../lib/data'
 import { db } from '../lib/data'
-import { extractTextFromUrl } from '../lib/pdfExtract'
+import { extractTextFromUrl, renderPdfPagesToBase64 } from '../lib/pdfExtract'
 import { X, Sparkles, Loader2, AlertTriangle, Check, Trash2, Plus, Edit3, Image, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface Props {
@@ -58,9 +58,11 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
     setStep('extracting'); setError('')
 
     try {
-      // Step 1: Extract text from PDF in browser (no CORS issue, Supabase is public)
       let pdfText = ''
+      let pageImages: string[] = []
+
       if (lesson.fileUrl) {
+        // Step 1: Try to extract text first (fast, works for text-based PDFs)
         setProgress('Extrayendo texto del PDF...')
         try {
           pdfText = await extractTextFromUrl(lesson.fileUrl)
@@ -68,9 +70,20 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
         } catch (e) {
           console.warn('No se pudo extraer texto:', e)
         }
+
+        // Step 2: If no text (scanned PDF), render pages as images for Claude vision
+        if (!pdfText || pdfText.trim().length < 100) {
+          setProgress('PDF escaneado detectado — renderizando páginas como imágenes...')
+          try {
+            pageImages = await renderPdfPagesToBase64(lesson.fileUrl, 10)
+            console.log('Páginas renderizadas:', pageImages.length)
+          } catch (e) {
+            console.warn('No se pudieron renderizar páginas:', e)
+          }
+        }
       }
 
-      // Step 2: Send text to Netlify function → Claude
+      // Step 3: Send to Netlify function → Claude
       setStep('generating')
       setProgress('Claude está analizando el examen y extrayendo todas las preguntas...')
 
@@ -82,6 +95,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
           title:    lesson.title,
           fileName: lesson.fileName,
           pdfText,
+          pageImages,
         }),
       })
 
