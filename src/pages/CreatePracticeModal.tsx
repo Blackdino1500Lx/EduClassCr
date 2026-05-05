@@ -1,72 +1,53 @@
 import { useState } from 'react'
 import type { Lesson, Student, Question } from '../lib/data'
 import { db } from '../lib/data'
-import { pdfUrlToBase64 } from '../lib/pdfExtract'
 import { X, Sparkles, Loader2, AlertTriangle, Check, Trash2, Plus, Edit3 } from 'lucide-react'
 
 interface Props {
   lesson: Lesson; students: Student[]
   onClose: () => void; onSaved: () => void
 }
-
-type Step = 'extracting' | 'generating' | 'review' | 'saving' | 'done' | 'error'
-
+type Step = 'generating' | 'review' | 'saving' | 'done' | 'error'
 const uid = () => Math.random().toString(36).slice(2, 10)
 
-
-async function generateFromPdf(lesson: Lesson): Promise<Question[]> {
-  const isMath = lesson.subject === 'Matemáticas'
-
-  const systemPrompt = `Sos una tutora experta en ${lesson.subject}. Tu tarea es extraer o generar preguntas de práctica a partir del contenido de un examen del MEP de Costa Rica.
-INSTRUCCIONES:
-- Identificá preguntas numeradas en el documento y extraélas tal como están
-- Para opción múltiple: extraé las opciones exactas e indicá cuál es la correcta (índice 0-3)
-- Para desarrollo/matemáticas: usá type "open"
-- Generá entre 5 y 10 preguntas
-- ${isMath ? 'Preferí type "open" para desarrollo matemático' : 'Preferí type "multiple" con 4 opciones'}
-- Respondé ÚNICAMENTE con un JSON array válido, sin markdown ni texto extra`
-
-  const userContent: any[] = []
-
-  // Si hay PDF, mandarlo como documento a Claude
-  if (lesson.fileUrl) {
-    try {
-      const b64 = await pdfUrlToBase64(lesson.fileUrl)
-      userContent.push({
-        type: 'document',
-        source: { type: 'base64', media_type: 'application/pdf', data: b64 }
-      })
-    } catch (_e) {
-      // Si falla el PDF, usar texto de contexto
-      console.warn('No se pudo cargar el PDF, usando contexto de texto')
-    }
-  }
-
-  userContent.push({
-    type: 'text',
-    text: `Extraé las preguntas de práctica de este examen de ${lesson.subject} — ${lesson.title}.\n\nContexto adicional: ${lesson.content ?? ''}\n\nRespondé SOLO con el JSON array de preguntas.`
-  })
-
+async function generateQuestions(lesson: Lesson): Promise<Question[]> {
+  // El servidor descarga el PDF y se lo manda a Claude
   const response = await fetch('/.netlify/functions/generate-practice', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ systemPrompt, userContent }),
+    body: JSON.stringify({
+      pdfUrl:   lesson.fileUrl,
+      subject:  lesson.subject,
+      title:    lesson.title,
+      fileName: lesson.fileName,
+    }),
   })
 
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`API error ${response.status}: ${err}`)
-  }
+  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`)
 
-  const data  = await response.json()
-  const raw   = data.content?.[0]?.text ?? '[]'
-  const clean = raw.replace(/```json|```/g, '').trim()
-  return JSON.parse(clean).map((q: any) => ({ ...q, id: uid() }))
+  const data = await response.json()
+  if (data.error) throw new Error(data.error)
+
+  const raw = data.content?.[0]?.text ?? ''
+  if (!raw) throw new Error('La IA no devolvió contenido. Verificá ANTHROPIC_KEY en Netlify.')
+
+  // Extraer el JSON array aunque venga con texto alrededor
+  const jsonMatch = raw.match(/\[[\s\S]*\]/)
+  if (!jsonMatch) throw new Error(`Respuesta inesperada: ${raw.slice(0, 300)}`)
+
+  const parsed = JSON.parse(jsonMatch[0])
+  return parsed.map((q: any) => ({
+    id:            uid(),
+    text:          String(q.text ?? ''),
+    type:          q.type === 'open' ? 'open' : 'multiple',
+    options:       q.options ?? (q.type !== 'open' ? ['', '', '', ''] : undefined),
+    correctOption: typeof q.correctOption === 'number' ? q.correctOption : 0,
+    points:        Number(q.points) || 10,
+  }))
 }
 
 export default function CreatePracticeModal({ lesson, students, onClose, onSaved }: Props) {
-  const [step, setStep]               = useState<Step>('extracting')
-  const [progress, setProgress]       = useState('Leyendo el PDF...')
+  const [step, setStep]               = useState<Step>('generating')
   const [questions, setQuestions]     = useState<Question[]>([])
   const [editingQ, setEditingQ]       = useState<string | null>(null)
   const [error, setError]             = useState('')
@@ -75,20 +56,16 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
   const [dueDate, setDueDate]         = useState('')
   const [assignedTo, setAssignedTo]   = useState<string[]>([])
 
-  // Auto-start
   useState(() => { startGeneration() })
 
   async function startGeneration() {
-    setStep('extracting'); setError('')
-    setProgress(lesson.fileUrl ? 'Descargando PDF...' : 'Preparando contenido...')
+    setStep('generating'); setError('')
     try {
-      setStep('generating')
-      setProgress('Claude está leyendo el examen y extrayendo preguntas...')
-      const qs = await generateFromPdf(lesson)
+      const qs = await generateQuestions(lesson)
       setQuestions(qs)
       setStep('review')
     } catch (e: any) {
-      setError(e.message ?? 'Error procesando')
+      setError(e.message ?? 'Error generando preguntas')
       setStep('error')
     }
   }
@@ -126,7 +103,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
     }
   }
 
-  const totalPoints = questions.reduce((a, q) => a + q.points, 0)
+  const totalPoints = questions.reduce((a, q) => a + (Number(q.points) || 0), 0)
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -134,19 +111,16 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
         <div className="modal-header">
           <div>
             <h3>Crear práctica con IA</h3>
-            <p className="modal-subtitle" style={{padding:0, marginTop:4}}>{lesson.title}</p>
+            <p className="modal-subtitle" style={{padding:0,marginTop:4}}>{lesson.title}</p>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={18}/></button>
         </div>
 
-        {/* States */}
-        {(step === 'extracting' || step === 'generating') && (
+        {step === 'generating' && (
           <div className="modal-loading">
             <div className="ai-spinner"><Sparkles size={32} className="sparkle-spin"/></div>
-            <p className="ai-progress-text">{progress}</p>
-            <div className="ai-progress-bar">
-              <div className={`ai-progress-fill ${step === 'generating' ? 'fill-70' : 'fill-30'}`}/>
-            </div>
+            <p className="ai-progress-text">Claude está leyendo el PDF y extrayendo las preguntas...</p>
+            <div className="ai-progress-bar"><div className="ai-progress-fill fill-70"/></div>
           </div>
         )}
 
@@ -155,7 +129,6 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
             <div className="error-msg" style={{marginBottom:16}}>
               <AlertTriangle size={16}/> {error}
             </div>
-
             <div className="form-actions">
               <button className="btn-outline" onClick={onClose}>Cerrar</button>
               <button className="btn-primary" onClick={startGeneration}>Reintentar</button>
@@ -166,13 +139,13 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
         {step === 'done' && (
           <div className="modal-loading">
             <Check size={48} style={{color:'var(--success)'}}/>
-            <p style={{fontWeight:600, fontSize:16}}>¡Práctica creada exitosamente!</p>
+            <p style={{fontWeight:600,fontSize:16}}>¡Práctica creada!</p>
           </div>
         )}
 
         {step === 'saving' && (
           <div className="modal-loading">
-            <Loader2 size={32} className="spin"/><p>Guardando práctica...</p>
+            <Loader2 size={32} className="spin"/><p>Guardando...</p>
           </div>
         )}
 
@@ -197,7 +170,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                   {students.length === 0
                     ? <span className="hint-text">Registrá alumnos primero.</span>
                     : students.map(s => (
-                      <label key={s.id} className={`assign-chip ${assignedTo.includes(s.id) ? 'selected' : ''}`}>
+                      <label key={s.id} className={`assign-chip ${assignedTo.includes(s.id)?'selected':''}`}>
                         <input type="checkbox" checked={assignedTo.includes(s.id)}
                           onChange={e => setAssignedTo(prev =>
                             e.target.checked ? [...prev, s.id] : prev.filter(x => x !== s.id)
@@ -211,7 +184,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
 
               <div className="ai-generated-banner">
                 <Sparkles size={14}/>
-                <span>IA generó <strong>{questions.length} preguntas</strong> · {totalPoints} pts totales. Revisá y editá antes de guardar.</span>
+                <span>IA extrajo <strong>{questions.length} preguntas</strong> del PDF · {totalPoints} pts totales. Revisá y editá antes de guardar.</span>
                 <button className="btn-outline sm" onClick={addQ}><Plus size={12}/> Agregar</button>
               </div>
 
@@ -254,14 +227,14 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                       </>
                     ) : (
                       <>
-                        <p className="q-text">{q.text || <em style={{color:'var(--muted)'}}>Sin enunciado</em>}</p>
+                        <p className="q-text">{q.text || <em style={{color:'var(--muted)'}}>Sin enunciado — click en editar</em>}</p>
                         {q.type==='multiple' && q.options && (
                           <div className="options-list" style={{pointerEvents:'none'}}>
                             {q.options.map((opt,oi) => (
                               <div key={oi} className={`option-label ${oi===q.correctOption?'selected':''}`}>
                                 <span className="opt-letter">{String.fromCharCode(65+oi)}</span>
-                                {opt||<em>Vacía</em>}
-                                {oi===q.correctOption && <span style={{marginLeft:'auto',fontSize:11,color:'var(--success)'}}>✓ correcta</span>}
+                                {opt||<em style={{color:'var(--muted)'}}>Vacía</em>}
+                                {oi===q.correctOption && <span style={{marginLeft:'auto',fontSize:11,color:'var(--success)'}}>✓</span>}
                               </div>
                             ))}
                           </div>
