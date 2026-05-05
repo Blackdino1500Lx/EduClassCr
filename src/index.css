@@ -478,3 +478,151 @@ a { color: inherit; text-decoration: none; }
   transition: border-color .2s; background: var(--warm-white);
 }
 .field input[type="email"]:focus, .field input[type="password"]:focus { border-color: var(--teal); }
+
+/* ── Lessons ──────────────────────────────────────────────────── */
+.lesson-indicators { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.lesson-chip {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--cream); border: 1px solid var(--border);
+  border-radius: 100px; padding: 3px 10px; font-size: 11px; color: var(--muted);
+}
+.lesson-link-badge { font-size: 12px; color: var(--teal); margin-bottom: 8px; }
+.lesson-preview { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+.lesson-text-preview { background: var(--cream); border-radius: 10px; padding: 16px; font-size: 14px; line-height: 1.7; color: var(--ink); }
+.yt-preview { margin-top: 12px; }
+
+/* Upload zone */
+.upload-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 20px; text-align: center; background: var(--cream); }
+.upload-label {
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer; font-size: 14px; color: var(--teal); font-weight: 500;
+  padding: 10px 20px; border: 1.5px solid var(--teal); border-radius: 8px;
+  transition: all .2s;
+}
+.upload-label:hover { background: var(--teal); color: white; }
+.upload-done { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.text-teal { color: var(--teal); }
+.text-coral { color: var(--coral); }
+
+/* AI gen section */
+.ai-gen-section { border-top: 1px solid var(--border); margin-top: 20px; padding-top: 20px; display: flex; flex-direction: column; gap: 12px; }
+.ai-gen-header { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--coral); }
+.gen-questions-preview { background: var(--cream); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.gen-q-card { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 13px; }
+.gen-q-card p { margin: 6px 0; }
+.gen-q-card ul { margin: 6px 0 0 16px; }
+.gen-q-card .correct-opt { color: var(--success); font-weight: 600; }
+
+/* Lesson view (student) */
+.lesson-view-card { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 20px; }
+.lesson-view-card h2 { font-family: 'Fraunces', serif; font-size: 26px; margin-bottom: 20px; }
+.lesson-section { margin-bottom: 20px; }
+.lesson-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 15px; font-weight: 700; color: var(--teal); margin-bottom: 12px;
+  cursor: pointer;
+}
+.yt-embed-full { border-radius: 12px; overflow: hidden; }
+
+/* ── Library Tab ──────────────────────────────────────────────── */
+.library-upload-zone {
+  background: white; border: 1px solid var(--border); border-radius: 16px;
+  padding: 24px; margin-bottom: 24px; display: flex; align-items: center; gap: 20px;
+}
+.lup-option { display: flex; align-items: center; gap: 14px; flex: 1; }
+.lup-icon { font-size: 28px; flex-shrink: 0; color: var(--teal); }
+.lup-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.lup-text strong { font-size: 14px; }
+.lup-text span { font-size: 12px; color: var(--muted); }
+.lup-divider { font-size: 13px; color: var(--muted); padding: 0 8px; }
+
+/* Upload progress */
+.upload-progress-card {
+  background: white; border: 1px solid var(--border); border-radius: 14px;
+  padding: 20px; margin-bottom: 24px;
+}
+.upc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.upc-title { font-size: 14px; font-weight: 600; }
+.upc-summary { display: flex; gap: 8px; }
+.badge-success { background: #dcfce7; color: #15803d; padding: 3px 10px; border-radius: 100px; font-size: 12px; font-weight: 600; }
+.badge-warn    { background: #fef9c3; color: #a16207; padding: 3px 10px; border-radius: 100px; font-size: 12px; font-weight: 600; }
+.badge-error   { background: #fef2f2; color: var(--danger); padding: 3px 10px; border-radius: 100px; font-size: 12px; font-weight: 600; }
+.upc-list { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }
+.upc-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; font-size: 13px; background: var(--cream); }
+.upc-done      { background: #f0fdf4; }
+.upc-error     { background: #fef2f2; }
+.upc-skipped   { opacity: .6; }
+.upc-uploading { background: #eff6ff; }
+.upc-status-icon { flex-shrink: 0; color: var(--success); display: flex; }
+.upc-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upc-meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.upc-error-text { font-size: 11px; color: var(--danger); }
+
+/* Filters */
+.library-filters {
+  display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center;
+}
+.filter-group { display: flex; align-items: center; gap: 6px; position: relative; }
+.filter-icon { color: var(--muted); flex-shrink: 0; }
+.filter-input, .filter-group select {
+  border: 1.5px solid var(--border); border-radius: 8px;
+  padding: 8px 12px; font-size: 13px; background: white; color: var(--ink);
+  transition: border-color .2s; font-family: inherit;
+}
+.filter-input { padding-left: 10px; min-width: 200px; }
+.filter-input:focus, .filter-group select:focus { border-color: var(--teal); outline: none; }
+
+/* Library grid */
+.library-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px;
+}
+.lib-card {
+  background: white; border: 1.5px solid var(--border); border-radius: 16px;
+  padding: 20px; display: flex; flex-direction: column; gap: 10px;
+  transition: box-shadow .2s, transform .15s;
+}
+.lib-card:hover { box-shadow: 0 6px 24px rgba(0,0,0,.09); transform: translateY(-2px); }
+.lib-card.lib-active { border-color: #86efac; }
+.lib-card.lib-inactive { opacity: .85; }
+
+.lib-card-top { display: flex; align-items: center; justify-content: space-between; }
+.lib-card-icon { color: var(--teal); opacity: .6; }
+.lib-card-title { font-size: 14px; font-weight: 700; line-height: 1.4; color: var(--ink); }
+.lib-card-file { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-card-assigned { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+.lib-card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.lib-card-actions a { font-size: 13px; }
+
+.status-pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 100px; }
+.pill-active   { background: #dcfce7; color: #15803d; }
+.pill-inactive { background: var(--cream); color: var(--muted); }
+
+.btn-danger-outline { border-color: #fca5a5 !important; color: var(--danger) !important; }
+.btn-danger-outline:hover { background: #fef2f2 !important; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4);
+  display: flex; align-items: center; justify-content: center; z-index: 200; padding: 24px;
+}
+.modal-card {
+  background: white; border-radius: 20px; width: 100%; max-width: 520px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.2); display: flex; flex-direction: column; max-height: 85vh;
+}
+.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 0; }
+.modal-header h3 { font-family: 'Fraunces', serif; font-size: 20px; }
+.modal-subtitle { padding: 8px 24px 0; font-size: 13px; color: var(--muted); }
+.modal-body { padding: 16px 24px; overflow-y: auto; flex: 1; }
+.modal-footer { padding: 16px 24px 20px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--border); }
+
+.assign-chip { position: relative; }
+.chip-grade { font-size: 10px; color: var(--muted); margin-left: 4px; }
+.select-all { background: var(--cream); border-style: dashed; cursor: pointer; font-size: 12px; color: var(--teal); }
+
+@media (max-width: 768px) {
+  .library-upload-zone { flex-direction: column; }
+  .lup-divider { display: none; }
+  .library-grid { grid-template-columns: 1fr; }
+  .library-filters { flex-direction: column; align-items: stretch; }
+  .filter-input { min-width: unset; width: 100%; }
+}
