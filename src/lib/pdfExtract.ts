@@ -1,9 +1,29 @@
 // @ts-nocheck
 import * as pdfjsLib from 'pdfjs-dist'
 
-// Usar CDN worker que funciona tanto en dev como en producción
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`
+// Worker hosteado en el mismo dominio — funciona en dev y producción sin CSP issues
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
+/**
+ * Extrae el texto completo de un PDF desde una URL pública.
+ */
+export async function extractTextFromUrl(url: string): Promise<string> {
+  const response = await fetch(url)
+  const buffer   = await response.arrayBuffer()
+  const pdf      = await pdfjsLib.getDocument({ data: buffer }).promise
+  let text = ''
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page    = await pdf.getPage(i)
+    const content = await page.getTextContent()
+    const pageText = content.items.map((item: any) => item.str).join(' ')
+    text += `\n[Página ${i}]\n${pageText}`
+  }
+  return text.trim()
+}
+
+/**
+ * Renderiza cada página del PDF como imagen JPEG.
+ */
 export async function extractPdfPages(file: File, maxPages = 30): Promise<{ page: number; blob: Blob }[]> {
   const buffer = await file.arrayBuffer()
   const pdf    = await pdfjsLib.getDocument({ data: buffer }).promise
@@ -24,9 +44,8 @@ export async function extractPdfPages(file: File, maxPages = 30): Promise<{ page
       )
       result.push({ page: i, blob })
     } catch (e) {
-      console.warn(`Error en página ${i}:`, e)
+      console.warn(`Error página ${i}:`, e)
     }
   }
-
   return result
 }

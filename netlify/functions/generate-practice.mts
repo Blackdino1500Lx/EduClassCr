@@ -16,7 +16,7 @@ export default async (request: Request, _context: Context) => {
   }
 
   try {
-    const { pdfUrl, subject, title, fileName } = await request.json()
+    const { subject, title, fileName, pdfText } = await request.json()
     const ANTHROPIC_KEY = Netlify.env.get('ANTHROPIC_KEY')
 
     if (!ANTHROPIC_KEY) {
@@ -25,58 +25,13 @@ export default async (request: Request, _context: Context) => {
       })
     }
 
-    const isMath = subject === 'Matemáticas'
-    const userContent: any[] = []
-
-    // Download PDF server-side (no CORS issues)
-    if (pdfUrl) {
-      try {
-        const pdfResponse = await fetch(pdfUrl)
-        if (pdfResponse.ok) {
-          const buffer = await pdfResponse.arrayBuffer()
-          const base64 = Buffer.from(buffer).toString('base64')
-          userContent.push({
-            type: 'document',
-            source: { type: 'base64', media_type: 'application/pdf', data: base64 }
-          })
-          console.log('PDF loaded, size:', buffer.byteLength, 'bytes')
-        } else {
-          console.warn('PDF fetch failed:', pdfResponse.status)
-        }
-      } catch (e) {
-        console.warn('PDF download error:', e)
-      }
+    if (!pdfText || pdfText.trim().length < 50) {
+      return new Response(JSON.stringify({ error: 'No se pudo extraer texto del PDF. El archivo puede estar escaneado como imagen.' }), {
+        status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      })
     }
 
-    userContent.push({
-      type: 'text',
-      text: `Analizá COMPLETAMENTE este examen del MEP de Costa Rica.
-
-Material: ${title}
-Archivo: ${fileName}  
-Materia: ${subject}
-
-INSTRUCCIONES CRÍTICAS:
-- Extraé TODAS las preguntas del examen, sin excepción. Si el examen tiene 55 preguntas, extraé las 55.
-- Para cada pregunta de opción múltiple: incluí el enunciado completo y las 4 opciones (A, B, C, D) exactamente como aparecen
-- Si una pregunta tiene una gráfica o imagen, describí brevemente qué muestra entre corchetes al inicio del enunciado, ej: "[Gráfico: polígono irregular en sistema de coordenadas con vértices en (1,2), (2,5)...]"
-- Para preguntas de desarrollo: usá type "open"
-- Los puntos deben ser números enteros (típicamente entre 1 y 5 para exámenes del MEP)
-- La respuesta correcta (correctOption) debe ser el índice 0=A, 1=B, 2=C, 3=D
-
-Respondé ÚNICAMENTE con el JSON array completo. Sin markdown, sin explicaciones, sin texto antes o después:
-
-[
-  {
-    "id": "q1",
-    "text": "enunciado completo de la pregunta",
-    "type": "multiple",
-    "options": ["opción A exacta", "opción B exacta", "opción C exacta", "opción D exacta"],
-    "correctOption": 0,
-    "points": 5
-  }
-]`
-    })
+    const isMath = subject === 'Matemáticas'
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -87,15 +42,35 @@ Respondé ÚNICAMENTE con el JSON array completo. Sin markdown, sin explicacione
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 8000,  // aumentado para exámenes grandes
-        system: `Sos una tutora experta en ${subject} de Costa Rica. Tu única tarea es extraer TODAS las preguntas de exámenes del MEP en formato JSON. Respondés ÚNICAMENTE con el JSON array, sin ningún texto adicional, sin markdown.`,
-        messages: [{ role: 'user', content: userContent }],
+        max_tokens: 8000,
+        system: `Sos una tutora experta en ${subject} de Costa Rica. Tu tarea es extraer TODAS las preguntas de exámenes del MEP a partir del texto extraído del PDF. Respondés ÚNICAMENTE con un JSON array válido. Sin markdown, sin texto adicional.`,
+        messages: [{
+          role: 'user',
+          content: `Extraé TODAS las preguntas de este examen del MEP de Costa Rica.
+
+Material: ${title}
+Archivo: ${fileName}
+Materia: ${subject}
+
+TEXTO EXTRAÍDO DEL PDF:
+${pdfText.slice(0, 15000)}
+
+INSTRUCCIONES:
+- Extraé TODAS las preguntas numeradas que encontrés en el texto
+- Para opción múltiple: enunciado completo + 4 opciones exactas (A, B, C, D)
+- Si la pregunta menciona una gráfica o figura que no podés ver en el texto, indicalo así: "[Ver gráfica en PDF] enunciado..."
+- Para preguntas de desarrollo: type "open"
+- correctOption: 0=A, 1=B, 2=C, 3=D (si no podés determinarlo, ponés 0)
+- points: ${isMath ? '10' : '5'} para todas
+
+Respondé SOLO con el JSON array:
+[{"id":"q1","text":"...","type":"multiple","options":["A","B","C","D"],"correctOption":0,"points":${isMath ? '10' : '5'}}]`
+        }],
       }),
     })
 
     const data = await response.json()
-    console.log('Anthropic status:', response.status)
-    console.log('Content preview:', data.content?.[0]?.text?.slice(0, 500))
+    console.log('Status:', response.status, '| Preview:', data.content?.[0]?.text?.slice(0, 200))
 
     return new Response(JSON.stringify(data), {
       status: response.status,
@@ -103,10 +78,9 @@ Respondé ÚNICAMENTE con el JSON array completo. Sin markdown, sin explicacione
     })
 
   } catch (err: any) {
-    console.error('Function error:', err)
+    console.error('Error:', err)
     return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     })
   }
 }
