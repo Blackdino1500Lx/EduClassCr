@@ -12,10 +12,21 @@ export interface Question {
   id: string; text: string; type: 'open' | 'multiple'
   options?: string[]; correctOption?: number; points: number
 }
+export interface Lesson {
+  id: string; title: string; subject: Subject
+  content?: string       // texto enriquecido
+  fileUrl?: string       // URL del PDF en Storage
+  fileName?: string
+  youtubeUrl?: string    // link de YouTube
+  assignedTo: string[]
+  isActive: boolean
+  createdAt: string
+}
 export interface Practice {
   id: string; title: string; subject: Subject; description: string
   questions: Question[]; assignedTo: string[]; dueDate?: string
   createdAt: string; isActive: boolean
+  lessonId?: string      // lección asociada opcional
 }
 export interface Answer { questionId: string; value: string | number }
 export interface Submission {
@@ -24,10 +35,13 @@ export interface Submission {
   teacherNote?: string; antiCheatFlags: string[]
 }
 
-const toStudent  = (r: any): Student    => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade, level: r.level, pin: r.pin, createdAt: r.created_at })
-const toPractice = (r: any): Practice   => ({ id: r.id, title: r.title, subject: r.subject, description: r.description ?? '', questions: r.questions ?? [], assignedTo: r.assigned_to ?? [], dueDate: r.due_date ?? undefined, createdAt: r.created_at, isActive: r.is_active })
+// ── Mappers ──────────────────────────────────────────────────────
+const toStudent  = (r: any): Student  => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade, level: r.level, pin: r.pin, createdAt: r.created_at })
+const toPractice = (r: any): Practice => ({ id: r.id, title: r.title, subject: r.subject, description: r.description ?? '', questions: r.questions ?? [], assignedTo: r.assigned_to ?? [], dueDate: r.due_date ?? undefined, createdAt: r.created_at, isActive: r.is_active, lessonId: r.lesson_id ?? undefined })
+const toLesson   = (r: any): Lesson   => ({ id: r.id, title: r.title, subject: r.subject, content: r.content ?? undefined, fileUrl: r.file_url ?? undefined, fileName: r.file_name ?? undefined, youtubeUrl: r.youtube_url ?? undefined, assignedTo: r.assigned_to ?? [], isActive: r.is_active, createdAt: r.created_at })
 const toSub      = (r: any): Submission => ({ id: r.id, practiceId: r.practice_id, studentId: r.student_id, answers: r.answers ?? [], submittedAt: r.submitted_at, score: r.score ?? undefined, reviewed: r.reviewed, teacherNote: r.teacher_note ?? undefined, antiCheatFlags: r.anti_cheat_flags ?? [] })
 
+// ── DB ───────────────────────────────────────────────────────────
 export const db = {
   students: {
     async getAll(): Promise<Student[]> {
@@ -51,6 +65,32 @@ export const db = {
       const { data } = await q; return (data?.length ?? 0) > 0
     },
   },
+
+  lessons: {
+    async getAll(): Promise<Lesson[]> {
+      const { data, error } = await supabase.from('lessons').select('*').order('created_at', { ascending: false })
+      if (error) throw error; return (data ?? []).map(toLesson)
+    },
+    async add(l: Omit<Lesson, 'id'|'createdAt'>): Promise<Lesson> {
+      const { data, error } = await supabase.from('lessons')
+        .insert({ title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, youtube_url: l.youtubeUrl ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
+        .select().single()
+      if (error) throw error; return toLesson(data)
+    },
+    async update(l: Lesson): Promise<void> {
+      const { error } = await supabase.from('lessons')
+        .update({ title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, youtube_url: l.youtubeUrl ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
+        .eq('id', l.id)
+      if (error) throw error
+    },
+    async delete(id: string) { const { error } = await supabase.from('lessons').delete().eq('id', id); if (error) throw error },
+    async forStudent(studentId: string): Promise<Lesson[]> {
+      const { data, error } = await supabase.from('lessons').select('*').eq('is_active', true)
+      if (error) throw error
+      return (data ?? []).map(toLesson).filter(l => l.assignedTo.includes(studentId))
+    },
+  },
+
   practices: {
     async getAll(): Promise<Practice[]> {
       const { data, error } = await supabase.from('practices').select('*').order('created_at', { ascending: false })
@@ -58,7 +98,7 @@ export const db = {
     },
     async add(p: Omit<Practice, 'id'|'createdAt'>): Promise<Practice> {
       const { data, error } = await supabase.from('practices')
-        .insert({ title: p.title, subject: p.subject, description: p.description, questions: p.questions, assigned_to: p.assignedTo, due_date: p.dueDate || null, is_active: p.isActive })
+        .insert({ title: p.title, subject: p.subject, description: p.description, questions: p.questions, assigned_to: p.assignedTo, due_date: p.dueDate || null, is_active: p.isActive, lesson_id: p.lessonId || null })
         .select().single()
       if (error) throw error; return toPractice(data)
     },
@@ -69,6 +109,7 @@ export const db = {
       return (data ?? []).map(toPractice).filter(p => p.assignedTo.includes(studentId))
     },
   },
+
   submissions: {
     async getAll(): Promise<Submission[]> {
       const { data, error } = await supabase.from('submissions').select('*').order('submitted_at', { ascending: false })
@@ -89,8 +130,20 @@ export const db = {
       return !!data
     },
   },
+
+  storage: {
+    async uploadFile(file: File): Promise<{ url: string; name: string }> {
+      const ext  = file.name.split('.').pop()
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('materials').upload(path, file)
+      if (error) throw error
+      const { data } = supabase.storage.from('materials').getPublicUrl(path)
+      return { url: data.publicUrl, name: file.name }
+    },
+  },
 }
 
+// ── Auth ─────────────────────────────────────────────────────────
 export const auth = {
   async signIn(email: string, password: string) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
