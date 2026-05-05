@@ -87,6 +87,9 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
       setStep('generating')
       setProgress('Claude está analizando el examen y extrayendo todas las preguntas...')
 
+      // Limit text to avoid 502 — Claude works well with first 8000 chars
+      const textToSend = pdfText.slice(0, 8000)
+
       const response = await fetch('/.netlify/functions/generate-practice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -94,8 +97,8 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
           subject:  lesson.subject,
           title:    lesson.title,
           fileName: lesson.fileName,
-          pdfText,
-          pageImages,
+          pdfText:  textToSend,
+          pageImages: [], // images sent separately via Storage URLs
         }),
       })
 

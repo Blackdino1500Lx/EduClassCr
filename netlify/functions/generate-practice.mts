@@ -30,20 +30,17 @@ export default async (request: Request, _context: Context) => {
     const hasImages = pageImages && pageImages.length > 0
 
     if (!hasText && !hasImages) {
-      return new Response(JSON.stringify({ 
-        error: 'El PDF está escaneado como imagen y no se pudieron extraer las páginas. Intentá subir el PDF de nuevo.' 
+      return new Response(JSON.stringify({
+        error: 'No se pudo extraer contenido del PDF. Intentá subir el archivo de nuevo.'
       }), {
         status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       })
     }
 
-    // Build message content — prefer images if available (better for math/graphics)
     const userContent: any[] = []
 
     if (hasImages) {
-      // Send up to 10 pages as images to Claude vision
-      const pagesToSend = pageImages.slice(0, 10)
-      for (const b64 of pagesToSend) {
+      for (const b64 of pageImages.slice(0, 10)) {
         userContent.push({
           type: 'image',
           source: { type: 'base64', media_type: 'image/jpeg', data: b64 }
@@ -51,26 +48,29 @@ export default async (request: Request, _context: Context) => {
       }
     }
 
-    const promptText = `Analizá ${hasImages ? 'estas páginas del examen' : 'este texto extraído del examen'} del MEP de Costa Rica.
+    const textSection = hasText && !hasImages ? `TEXTO EXTRAÍDO DEL EXAMEN:\n${pdfText.slice(0, 12000)}` : ''
 
-Material: ${title}
-Archivo: ${fileName}
-Materia: ${subject}
+    const prompt = [
+      `Analizá este examen del MEP de Costa Rica.`,
+      `Material: ${title}`,
+      `Archivo: ${fileName}`,
+      `Materia: ${subject}`,
+      textSection,
+      ``,
+      `INSTRUCCIONES CRÍTICAS:`,
+      `- Extraé ÚNICAMENTE las preguntas numeradas: 1) 2) 3)... o 1. 2. 3. etc.`,
+      `- IGNORÁ COMPLETAMENTE: encabezados, nombre/cédula del estudiante, fecha, instrucciones generales del examen, textos de lectura o contexto que no sean preguntas, firmas, avisos legales, información de la institución`,
+      `- Para opción múltiple: enunciado completo + opciones exactas sin la letra (solo el texto de cada opción)`,
+      `- Si el enunciado referencia una figura/gráfica que no está en el texto: escribí "[Ver figura en el examen]" al inicio del enunciado`,
+      `- Para matemáticas con procedimiento/desarrollo: type "open"`,
+      `- correctOption: 0=A, 1=B, 2=C, 3=D`,
+      `- points: ${isMath ? '10' : '5'} para todas`,
+      ``,
+      `Respondé SOLO con el JSON array. Sin markdown, sin texto antes o después:`,
+      `[{"id":"q1","text":"enunciado","type":"multiple","options":["opción A","opción B","opción C","opción D"],"correctOption":0,"points":${isMath ? '10' : '5'}}]`,
+    ].join('\n')
 
-${hasText && !hasImages ? `TEXTO:\n${pdfText.slice(0, 12000)}` : ''}
-
-INSTRUCCIONES:
-- Extraé TODAS las preguntas numeradas
-- Para opción múltiple: enunciado completo + 4 opciones exactas (A, B, C, D)
-- Si la pregunta tiene una gráfica o figura: incluila en el enunciado describiendo qué muestra
-- Para matemáticas con desarrollo: type "open"
-- correctOption: 0=A, 1=B, 2=C, 3=D
-- points: ${isMath ? '10' : '5'}
-
-Respondé SOLO con el JSON array, sin markdown:
-[{"id":"q1","text":"...","type":"multiple","options":["A","B","C","D"],"correctOption":0,"points":${isMath ? '10' : '5'}}]`
-
-    userContent.push({ type: 'text', text: promptText })
+    userContent.push({ type: 'text', text: prompt })
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -82,14 +82,13 @@ Respondé SOLO con el JSON array, sin markdown:
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 8000,
-        system: `Sos una tutora experta en ${subject} de Costa Rica. Extraés TODAS las preguntas de exámenes del MEP. Respondés ÚNICAMENTE con JSON array válido, sin markdown.`,
+        system: `Sos una tutora experta en ${subject} de Costa Rica. Tu única tarea es extraer las preguntas numeradas de exámenes del MEP, ignorando todo el texto que no sea una pregunta. Respondés ÚNICAMENTE con el JSON array solicitado, sin markdown ni texto adicional.`,
         messages: [{ role: 'user', content: userContent }],
       }),
     })
 
     const data = await response.json()
-    console.log('Status:', response.status, '| Mode:', hasImages ? 'vision' : 'text')
-    console.log('Preview:', data.content?.[0]?.text?.slice(0, 300))
+    console.log('Status:', response.status, '| Mode:', hasImages ? 'vision' : 'text', '| Preview:', data.content?.[0]?.text?.slice(0, 300))
 
     return new Response(JSON.stringify(data), {
       status: response.status,
