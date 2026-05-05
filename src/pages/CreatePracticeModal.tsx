@@ -12,7 +12,7 @@ interface Props {
 type Step = 'extracting' | 'generating' | 'review' | 'saving' | 'done' | 'error'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
-const ANTHROPIC_KEY = import.meta.env.VITE_ANTHROPIC_KEY as string
+
 
 async function generateFromPdf(lesson: Lesson): Promise<Question[]> {
   const isMath = lesson.subject === 'Matemáticas'
@@ -47,20 +47,10 @@ INSTRUCCIONES:
     text: `Extraé las preguntas de práctica de este examen de ${lesson.subject} — ${lesson.title}.\n\nContexto adicional: ${lesson.content ?? ''}\n\nRespondé SOLO con el JSON array de preguntas.`
   })
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetch('/.netlify/functions/generate-practice', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userContent }],
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ systemPrompt, userContent }),
   })
 
   if (!response.ok) {
@@ -165,11 +155,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
             <div className="error-msg" style={{marginBottom:16}}>
               <AlertTriangle size={16}/> {error}
             </div>
-            {!ANTHROPIC_KEY || ANTHROPIC_KEY === 'TU_API_KEY_AQUI' ? (
-              <div className="hint-text" style={{marginBottom:16}}>
-                ⚠️ Falta configurar <strong>VITE_ANTHROPIC_KEY</strong> en las variables de entorno de Netlify.
-              </div>
-            ) : null}
+
             <div className="form-actions">
               <button className="btn-outline" onClick={onClose}>Cerrar</button>
               <button className="btn-primary" onClick={startGeneration}>Reintentar</button>
