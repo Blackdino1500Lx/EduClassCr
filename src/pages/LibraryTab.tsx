@@ -2,9 +2,10 @@ import { useState, useRef } from 'react'
 import JSZip from 'jszip'
 import type { Lesson, Student, Subject, Grade } from '../lib/data'
 import { db } from '../lib/data'
+import CreatePracticeModal from './CreatePracticeModal'
 import {
   Upload, FileText, Search, Eye, EyeOff, Users, X,
-  Loader2, AlertTriangle, CheckCircle, FolderOpen, Filter
+  Loader2, AlertTriangle, CheckCircle, FolderOpen, Filter, Sparkles
 } from 'lucide-react'
 
 interface Props { lessons: Lesson[]; students: Student[]; reload: () => void }
@@ -114,6 +115,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
   const [filterStatus, setFilterStatus]   = useState<'all'|'active'|'inactive'>('all')
   const [search, setSearch]           = useState('')
   const [assignTarget, setAssignTarget] = useState<Lesson | null>(null)
+  const [createTarget, setCreateTarget] = useState<Lesson | null>(null)
   const zipRef = useRef<HTMLInputElement>(null)
   const pdfRef = useRef<HTMLInputElement>(null)
 
@@ -379,6 +381,9 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
                   <button className={`btn-outline sm ${l.isActive ? 'btn-danger-outline' : ''}`} onClick={() => toggleActive(l)}>
                     {l.isActive ? <><EyeOff size={13}/> Desactivar</> : <><Eye size={13}/> Activar</>}
                   </button>
+                  <button className="btn-primary sm" onClick={() => setCreateTarget(l)}>
+                    <Sparkles size={13}/> Crear práctica
+                  </button>
                   {l.fileUrl && (
                     <a href={l.fileUrl} target="_blank" rel="noreferrer" className="btn-outline sm">
                       <FileText size={13}/> Ver PDF
@@ -391,6 +396,14 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
         )
       }
 
+      {createTarget && (
+        <CreatePracticeModal
+          lesson={createTarget}
+          students={students}
+          onClose={() => setCreateTarget(null)}
+          onSaved={() => { setCreateTarget(null); reload() }}
+        />
+      )}
       {/* Assign modal */}
       {assignTarget && (
         <AssignModal lesson={assignTarget} students={students} onClose={() => setAssignTarget(null)} onSave={saveAssign}/>
