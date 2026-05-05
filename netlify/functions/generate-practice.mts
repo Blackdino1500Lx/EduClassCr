@@ -20,16 +20,15 @@ export default async (request: Request, _context: Context) => {
     const ANTHROPIC_KEY = Netlify.env.get('ANTHROPIC_KEY')
 
     if (!ANTHROPIC_KEY) {
-      return new Response(JSON.stringify({ error: 'ANTHROPIC_KEY no configurado' }), {
+      return new Response(JSON.stringify({ error: 'ANTHROPIC_KEY no configurado en Netlify → Environment Variables' }), {
         status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       })
     }
 
     const isMath = subject === 'Matemáticas'
-
-    // ── Descargar el PDF desde Supabase (servidor a servidor, sin CORS) ──
     const userContent: any[] = []
 
+    // Download PDF server-side (no CORS issues)
     if (pdfUrl) {
       try {
         const pdfResponse = await fetch(pdfUrl)
@@ -40,31 +39,41 @@ export default async (request: Request, _context: Context) => {
             type: 'document',
             source: { type: 'base64', media_type: 'application/pdf', data: base64 }
           })
+          console.log('PDF loaded, size:', buffer.byteLength, 'bytes')
+        } else {
+          console.warn('PDF fetch failed:', pdfResponse.status)
         }
       } catch (e) {
-        console.warn('No se pudo descargar el PDF:', e)
+        console.warn('PDF download error:', e)
       }
     }
 
     userContent.push({
       type: 'text',
-      text: `Analizá este examen del MEP de Costa Rica.
+      text: `Analizá COMPLETAMENTE este examen del MEP de Costa Rica.
+
 Material: ${title}
-Archivo: ${fileName}
+Archivo: ${fileName}  
 Materia: ${subject}
 
-Extraé las preguntas que ya existen en el documento. Si son de opción múltiple, extraélas con sus opciones exactas e indicá cuál es la correcta. Si son de desarrollo, usá type "open".
+INSTRUCCIONES CRÍTICAS:
+- Extraé TODAS las preguntas del examen, sin excepción. Si el examen tiene 55 preguntas, extraé las 55.
+- Para cada pregunta de opción múltiple: incluí el enunciado completo y las 4 opciones (A, B, C, D) exactamente como aparecen
+- Si una pregunta tiene una gráfica o imagen, describí brevemente qué muestra entre corchetes al inicio del enunciado, ej: "[Gráfico: polígono irregular en sistema de coordenadas con vértices en (1,2), (2,5)...]"
+- Para preguntas de desarrollo: usá type "open"
+- Los puntos deben ser números enteros (típicamente entre 1 y 5 para exámenes del MEP)
+- La respuesta correcta (correctOption) debe ser el índice 0=A, 1=B, 2=C, 3=D
 
-Generá entre 5 y 10 preguntas. Los puntos deben ser números enteros.
+Respondé ÚNICAMENTE con el JSON array completo. Sin markdown, sin explicaciones, sin texto antes o después:
 
-Respondé ÚNICAMENTE con un JSON array, sin markdown, sin texto adicional:
 [
   {
     "id": "q1",
-    "text": "enunciado completo",
-    "type": "${isMath ? 'open' : 'multiple'}",
-    ${!isMath ? '"options": ["A", "B", "C", "D"],\n    "correctOption": 0,' : ''}
-    "points": 10
+    "text": "enunciado completo de la pregunta",
+    "type": "multiple",
+    "options": ["opción A exacta", "opción B exacta", "opción C exacta", "opción D exacta"],
+    "correctOption": 0,
+    "points": 5
   }
 ]`
     })
@@ -78,15 +87,15 @@ Respondé ÚNICAMENTE con un JSON array, sin markdown, sin texto adicional:
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 3000,
-        system: `Sos una tutora experta en ${subject}. Extraés preguntas de exámenes del MEP de Costa Rica y las devolvés en formato JSON. Respondés ÚNICAMENTE con el JSON array solicitado, sin ningún texto adicional.`,
+        max_tokens: 8000,  // aumentado para exámenes grandes
+        system: `Sos una tutora experta en ${subject} de Costa Rica. Tu única tarea es extraer TODAS las preguntas de exámenes del MEP en formato JSON. Respondés ÚNICAMENTE con el JSON array, sin ningún texto adicional, sin markdown.`,
         messages: [{ role: 'user', content: userContent }],
       }),
     })
 
     const data = await response.json()
-    console.log('Status:', response.status)
-    console.log('Content preview:', data.content?.[0]?.text?.slice(0, 300))
+    console.log('Anthropic status:', response.status)
+    console.log('Content preview:', data.content?.[0]?.text?.slice(0, 500))
 
     return new Response(JSON.stringify(data), {
       status: response.status,
@@ -94,7 +103,7 @@ Respondé ÚNICAMENTE con un JSON array, sin markdown, sin texto adicional:
     })
 
   } catch (err: any) {
-    console.error('Error:', err)
+    console.error('Function error:', err)
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
