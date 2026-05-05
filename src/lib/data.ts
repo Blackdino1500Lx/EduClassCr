@@ -11,6 +11,7 @@ export interface Student {
 export interface Question {
   id: string; text: string; type: 'open' | 'multiple'
   options?: string[]; correctOption?: number; points: number
+  imageUrl?: string  // imagen adjunta (para gráficas de matemáticas)
 }
 export interface Lesson {
   id: string; title: string; subject: Subject
@@ -18,6 +19,7 @@ export interface Lesson {
   fileUrl?: string       // URL del PDF en Storage
   fileName?: string
   youtubeUrl?: string    // link de YouTube
+  pageImages?: string[]  // URLs de páginas extraídas como imágenes
   assignedTo: string[]
   isActive: boolean
   createdAt: string
@@ -38,7 +40,7 @@ export interface Submission {
 // ── Mappers ──────────────────────────────────────────────────────
 const toStudent  = (r: any): Student  => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade, level: r.level, pin: r.pin, createdAt: r.created_at })
 const toPractice = (r: any): Practice => ({ id: r.id, title: r.title, subject: r.subject, description: r.description ?? '', questions: r.questions ?? [], assignedTo: r.assigned_to ?? [], dueDate: r.due_date ?? undefined, createdAt: r.created_at, isActive: r.is_active, lessonId: r.lesson_id ?? undefined })
-const toLesson   = (r: any): Lesson   => ({ id: r.id, title: r.title, subject: r.subject, content: r.content ?? undefined, fileUrl: r.file_url ?? undefined, fileName: r.file_name ?? undefined, youtubeUrl: r.youtube_url ?? undefined, assignedTo: r.assigned_to ?? [], isActive: r.is_active, createdAt: r.created_at })
+const toLesson   = (r: any): Lesson   => ({ id: r.id, title: r.title, subject: r.subject, content: r.content ?? undefined, fileUrl: r.file_url ?? undefined, fileName: r.file_name ?? undefined, youtubeUrl: r.youtube_url ?? undefined, pageImages: r.page_images ?? undefined, assignedTo: r.assigned_to ?? [], isActive: r.is_active, createdAt: r.created_at })
 const toSub      = (r: any): Submission => ({ id: r.id, practiceId: r.practice_id, studentId: r.student_id, answers: r.answers ?? [], submittedAt: r.submitted_at, score: r.score ?? undefined, reviewed: r.reviewed, teacherNote: r.teacher_note ?? undefined, antiCheatFlags: r.anti_cheat_flags ?? [] })
 
 // ── DB ───────────────────────────────────────────────────────────
@@ -73,13 +75,13 @@ export const db = {
     },
     async add(l: Omit<Lesson, 'id'|'createdAt'>): Promise<Lesson> {
       const { data, error } = await supabase.from('lessons')
-        .insert({ title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, youtube_url: l.youtubeUrl ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
+        .insert({ title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, youtube_url: l.youtubeUrl ?? null, page_images: l.pageImages ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
         .select().single()
       if (error) throw error; return toLesson(data)
     },
     async update(l: Lesson): Promise<void> {
       const { error } = await supabase.from('lessons')
-        .update({ title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, youtube_url: l.youtubeUrl ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
+        .update({ title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, youtube_url: l.youtubeUrl ?? null, page_images: l.pageImages ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
         .eq('id', l.id)
       if (error) throw error
     },

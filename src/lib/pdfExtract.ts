@@ -1,15 +1,30 @@
-/**
- * Convierte una URL pública de PDF a base64.
- * Usamos esto para pasárselo directamente a Claude como documento.
- */
-export async function pdfUrlToBase64(url: string): Promise<string> {
-  // Supabase Storage necesita el proxy para evitar CORS en algunos casos.
-  // Si falla, retornamos null y Claude usará solo el título/contexto.
-  const response = await fetch(url, { mode: 'cors' })
-  if (!response.ok) throw new Error(`No se pudo descargar el PDF: ${response.status}`)
-  const buffer = await response.arrayBuffer()
-  const bytes  = new Uint8Array(buffer)
-  let binary   = ''
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
-  return btoa(binary)
+// @ts-nocheck
+import * as pdfjsLib from 'pdfjs-dist'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.mjs',
+  import.meta.url
+).toString()
+
+export async function extractPdfPages(file: File, maxPages = 20): Promise<{ page: number; blob: Blob }[]> {
+  const buffer = await file.arrayBuffer()
+  const pdf    = await pdfjsLib.getDocument({ data: buffer }).promise
+  const total  = Math.min(pdf.numPages, maxPages)
+  const result: { page: number; blob: Blob }[] = []
+
+  for (let i = 1; i <= total; i++) {
+    const page     = await pdf.getPage(i)
+    const viewport = page.getViewport({ scale: 1.5 })
+    const canvas   = document.createElement('canvas')
+    canvas.width   = viewport.width
+    canvas.height  = viewport.height
+    const ctx      = canvas.getContext('2d')
+    await page.render({ canvasContext: ctx, viewport }).promise
+    const blob = await new Promise<Blob>(resolve =>
+      canvas.toBlob(b => resolve(b!), 'image/jpeg', 0.85)
+    )
+    result.push({ page: i, blob })
+  }
+
+  return result
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Lesson, Student, Question } from '../lib/data'
 import { db } from '../lib/data'
-import { X, Sparkles, Loader2, AlertTriangle, Check, Trash2, Plus, Edit3 } from 'lucide-react'
+import { X, Sparkles, Loader2, AlertTriangle, Check, Trash2, Plus, Edit3, Image, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface Props {
   lesson: Lesson; students: Student[]
@@ -11,7 +11,6 @@ type Step = 'generating' | 'review' | 'saving' | 'done' | 'error'
 const uid = () => Math.random().toString(36).slice(2, 10)
 
 async function generateQuestions(lesson: Lesson): Promise<Question[]> {
-  // El servidor descarga el PDF y se lo manda a Claude
   const response = await fetch('/.netlify/functions/generate-practice', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -22,39 +21,64 @@ async function generateQuestions(lesson: Lesson): Promise<Question[]> {
       fileName: lesson.fileName,
     }),
   })
-
   if (!response.ok) throw new Error(`Error del servidor: ${response.status}`)
-
   const data = await response.json()
   if (data.error) throw new Error(data.error)
-
   const raw = data.content?.[0]?.text ?? ''
   if (!raw) throw new Error('La IA no devolvió contenido. Verificá ANTHROPIC_KEY en Netlify.')
-
-  // Extraer el JSON array aunque venga con texto alrededor
   const jsonMatch = raw.match(/\[[\s\S]*\]/)
   if (!jsonMatch) throw new Error(`Respuesta inesperada: ${raw.slice(0, 300)}`)
-
   const parsed = JSON.parse(jsonMatch[0])
   return parsed.map((q: any) => ({
-    id:            uid(),
-    text:          String(q.text ?? ''),
-    type:          q.type === 'open' ? 'open' : 'multiple',
-    options:       q.options ?? (q.type !== 'open' ? ['', '', '', ''] : undefined),
+    id: uid(), text: String(q.text ?? ''),
+    type: q.type === 'open' ? 'open' : 'multiple',
+    options: q.options ?? (q.type !== 'open' ? ['', '', '', ''] : undefined),
     correctOption: typeof q.correctOption === 'number' ? q.correctOption : 0,
-    points:        Number(q.points) || 10,
+    points: Number(q.points) || 10,
   }))
+}
+
+// ── Image picker modal ───────────────────────────────────────────
+function ImagePicker({ pageImages, onSelect, onClose }: {
+  pageImages: string[]; onSelect: (url: string) => void; onClose: () => void
+}) {
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-card" style={{maxWidth:700}}>
+        <div className="modal-header">
+          <h3>Elegir imagen del PDF</h3>
+          <button className="icon-btn" onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="modal-body">
+          <p className="hint-text" style={{marginBottom:12}}>Seleccioná la página que corresponde a esta pregunta:</p>
+          <div className="page-images-grid">
+            {pageImages.map((url, i) => (
+              <div key={i} className="page-thumb" onClick={() => { onSelect(url); onClose() }}>
+                <img src={url} alt={`Página ${i+1}`}/>
+                <span>Pág. {i+1}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function CreatePracticeModal({ lesson, students, onClose, onSaved }: Props) {
   const [step, setStep]               = useState<Step>('generating')
   const [questions, setQuestions]     = useState<Question[]>([])
   const [editingQ, setEditingQ]       = useState<string | null>(null)
+  const [pickingImageFor, setPickingImageFor] = useState<string | null>(null)
   const [error, setError]             = useState('')
   const [title, setTitle]             = useState(`Práctica · ${lesson.title}`)
   const [description, setDescription] = useState(`Basada en: ${lesson.fileName ?? lesson.title}`)
   const [dueDate, setDueDate]         = useState('')
   const [assignedTo, setAssignedTo]   = useState<string[]>([])
+  const [showPages, setShowPages]     = useState(false)
+
+  const pageImages = lesson.pageImages ?? []
+  const hasMathGraphics = lesson.subject === 'Matemáticas' && pageImages.length > 0
 
   useState(() => { startGeneration() })
 
@@ -144,14 +168,13 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
         )}
 
         {step === 'saving' && (
-          <div className="modal-loading">
-            <Loader2 size={32} className="spin"/><p>Guardando...</p>
-          </div>
+          <div className="modal-loading"><Loader2 size={32} className="spin"/><p>Guardando...</p></div>
         )}
 
         {step === 'review' && (
           <>
             <div className="modal-body">
+              {/* Metadata */}
               <div className="create-practice-meta">
                 <div className="field full"><label>Título</label>
                   <input value={title} onChange={e => setTitle(e.target.value)}/>
@@ -164,6 +187,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                 </div>
               </div>
 
+              {/* Assign */}
               <div className="field full" style={{marginBottom:20}}>
                 <label>Asignar a alumnos</label>
                 <div className="assign-grid">
@@ -182,12 +206,37 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                 </div>
               </div>
 
+              {/* Math graphics notice */}
+              {hasMathGraphics && (
+                <div className="math-graphics-notice">
+                  <Image size={15}/>
+                  <span>Este PDF tiene <strong>{pageImages.length} páginas</strong> extraídas como imágenes. Podés adjuntar la página correspondiente a cada pregunta con el botón 🖼️</span>
+                  <button className="btn-outline sm" onClick={() => setShowPages(v => !v)}>
+                    {showPages ? <><ChevronUp size={12}/> Ocultar páginas</> : <><ChevronDown size={12}/> Ver páginas</>}
+                  </button>
+                </div>
+              )}
+
+              {/* Page thumbnails preview */}
+              {showPages && pageImages.length > 0 && (
+                <div className="page-images-grid" style={{marginBottom:16}}>
+                  {pageImages.map((url, i) => (
+                    <div key={i} className="page-thumb">
+                      <img src={url} alt={`Página ${i+1}`}/>
+                      <span>Pág. {i+1}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* AI banner */}
               <div className="ai-generated-banner">
                 <Sparkles size={14}/>
-                <span>IA extrajo <strong>{questions.length} preguntas</strong> del PDF · {totalPoints} pts totales. Revisá y editá antes de guardar.</span>
+                <span>IA extrajo <strong>{questions.length} preguntas</strong> · {totalPoints} pts totales. Revisá y editá antes de guardar.</span>
                 <button className="btn-outline sm" onClick={addQ}><Plus size={12}/> Agregar</button>
               </div>
 
+              {/* Questions */}
               <div className="questions-list" style={{marginTop:12}}>
                 {questions.map((q, idx) => (
                   <div className="question-card" key={q.id}>
@@ -198,15 +247,33 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                           <input type="number" min={1} max={100} value={q.points} style={{width:56}}
                             onChange={e => updateQ(q.id,{points:+e.target.value})}/>
                         </div>
+                        {/* Image attach button — only if PDF has page images */}
+                        {pageImages.length > 0 && (
+                          <button className={`icon-btn ${q.imageUrl ? 'active-img-btn' : ''}`}
+                            title="Adjuntar imagen del PDF"
+                            onClick={() => setPickingImageFor(q.id)}>
+                            <Image size={14}/>
+                          </button>
+                        )}
                         <button className="icon-btn" onClick={() => setEditingQ(editingQ===q.id?null:q.id)}><Edit3 size={14}/></button>
                         <button className="icon-btn danger sm" onClick={() => removeQ(q.id)}><Trash2 size={14}/></button>
                       </div>
                     </div>
 
+                    {/* Attached image preview */}
+                    {q.imageUrl && (
+                      <div className="q-image-preview">
+                        <img src={q.imageUrl} alt="Imagen de la pregunta"/>
+                        <button className="remove-img-btn" onClick={() => updateQ(q.id, {imageUrl: undefined})}>
+                          <X size={12}/> Quitar imagen
+                        </button>
+                      </div>
+                    )}
+
                     {editingQ === q.id ? (
                       <>
                         <textarea rows={3} className="q-input" value={q.text}
-                          onChange={e => updateQ(q.id,{text:e.target.value})} placeholder="Enunciado"/>
+                          onChange={e => updateQ(q.id,{text:e.target.value})} placeholder="Enunciado de la pregunta"/>
                         {q.type==='multiple' && q.options && (
                           <div className="options-builder">
                             {q.options.map((opt,oi) => (
@@ -227,7 +294,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                       </>
                     ) : (
                       <>
-                        <p className="q-text">{q.text || <em style={{color:'var(--muted)'}}>Sin enunciado — click en editar</em>}</p>
+                        <p className="q-text">{q.text || <em style={{color:'var(--muted)'}}>Sin enunciado — click en ✏️ para editar</em>}</p>
                         {q.type==='multiple' && q.options && (
                           <div className="options-list" style={{pointerEvents:'none'}}>
                             {q.options.map((opt,oi) => (
@@ -255,6 +322,15 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
           </>
         )}
       </div>
+
+      {/* Image picker */}
+      {pickingImageFor && pageImages.length > 0 && (
+        <ImagePicker
+          pageImages={pageImages}
+          onSelect={url => updateQ(pickingImageFor, { imageUrl: url })}
+          onClose={() => setPickingImageFor(null)}
+        />
+      )}
     </div>
   )
 }

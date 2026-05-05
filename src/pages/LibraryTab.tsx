@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import JSZip from 'jszip'
+import { extractPdfPages } from '../lib/pdfExtract'
 import type { Lesson, Student, Subject, Grade } from '../lib/data'
 import { db } from '../lib/data'
 import CreatePracticeModal from './CreatePracticeModal'
@@ -176,12 +177,23 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
         const blob    = await zip.file(j.path)!.async('blob')
         const file    = new File([blob], j.name, { type: 'application/pdf' })
         const { url } = await db.storage.uploadFile(file)
+        // Extract pages as images
+        let pageImages: string[] = []
+        try {
+          const pages = await extractPdfPages(file, 20)
+          for (const { page, blob: imgBlob } of pages) {
+            const imgFile = new File([imgBlob], `${j.name}_p${page}.jpg`, { type: 'image/jpeg' })
+            const { url: imgUrl } = await db.storage.uploadFile(imgFile)
+            pageImages.push(imgUrl)
+          }
+        } catch (_e) { console.warn('No se pudieron extraer páginas:', _e) }
         await db.lessons.add({
           title:      friendlyTitle(j.path),
           subject:    j.subject,
           content:    `Examen MEP — ${j.grade}. Descargá el PDF para verlo completo.`,
           fileUrl:    url,
           fileName:   j.name,
+          pageImages,
           assignedTo: [],
           isActive:   false,
         })
