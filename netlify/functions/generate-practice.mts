@@ -16,7 +16,7 @@ export default async (request: Request, _context: Context) => {
   }
 
   try {
-    const { subject, title, fileName, pdfText, pageImages } = await request.json()
+    const { subject, title, fileName, pdfText, chunkInfo } = await request.json()
     const ANTHROPIC_KEY = Netlify.env.get('ANTHROPIC_KEY')
 
     if (!ANTHROPIC_KEY) {
@@ -25,52 +25,35 @@ export default async (request: Request, _context: Context) => {
       })
     }
 
-    const isMath = subject === 'Matemáticas'
-    const hasText = pdfText && pdfText.trim().length > 100
-    const hasImages = pageImages && pageImages.length > 0
-
-    if (!hasText && !hasImages) {
-      return new Response(JSON.stringify({
-        error: 'No se pudo extraer contenido del PDF. Intentá subir el archivo de nuevo.'
-      }), {
+    if (!pdfText || pdfText.trim().length < 50) {
+      return new Response(JSON.stringify({ error: 'Texto muy corto o vacío' }), {
         status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       })
     }
 
-    const userContent: any[] = []
-
-    if (hasImages) {
-      for (const b64 of pageImages.slice(0, 10)) {
-        userContent.push({
-          type: 'image',
-          source: { type: 'base64', media_type: 'image/jpeg', data: b64 }
-        })
-      }
-    }
-
-    const textSection = hasText && !hasImages ? `TEXTO EXTRAÍDO DEL EXAMEN:\n${pdfText.slice(0, 12000)}` : ''
+    const isMath = subject === 'Matemáticas'
+    const chunkNote = chunkInfo ? `Esta es la ${chunkInfo} del examen. Extraé solo las preguntas numeradas que aparezcan en este fragmento.` : ''
 
     const prompt = [
-      `Analizá este examen del MEP de Costa Rica.`,
-      `Material: ${title}`,
-      `Archivo: ${fileName}`,
-      `Materia: ${subject}`,
-      textSection,
+      `Examen del MEP de Costa Rica — ${subject}`,
+      `Material: ${title} | Archivo: ${fileName}`,
+      chunkNote,
       ``,
-      `INSTRUCCIONES CRÍTICAS:`,
-      `- Extraé ÚNICAMENTE las preguntas numeradas: 1) 2) 3)... o 1. 2. 3. etc.`,
-      `- IGNORÁ COMPLETAMENTE: encabezados, nombre/cédula del estudiante, fecha, instrucciones generales del examen, textos de lectura o contexto que no sean preguntas, firmas, avisos legales, información de la institución`,
-      `- Para opción múltiple: enunciado completo + opciones exactas sin la letra (solo el texto de cada opción)`,
-      `- Si el enunciado referencia una figura/gráfica que no está en el texto: escribí "[Ver figura en el examen]" al inicio del enunciado`,
-      `- Para matemáticas con procedimiento/desarrollo: type "open"`,
-      `- correctOption: 0=A, 1=B, 2=C, 3=D`,
-      `- points: ${isMath ? '10' : '5'} para todas`,
+      `TEXTO:`,
+      pdfText,
       ``,
-      `Respondé SOLO con el JSON array. Sin markdown, sin texto antes o después:`,
-      `[{"id":"q1","text":"enunciado","type":"multiple","options":["opción A","opción B","opción C","opción D"],"correctOption":0,"points":${isMath ? '10' : '5'}}]`,
+      `INSTRUCCIONES:`,
+      `- Extraé ÚNICAMENTE las preguntas numeradas (1) 2) 3)... o 1. 2. 3.)`,
+      `- IGNORÁ: encabezados, nombre del estudiante, instrucciones generales, textos que no sean preguntas`,
+      `- Opción múltiple: enunciado + 4 opciones exactas sin la letra`,
+      `- Figura/gráfica no visible en texto: "[Ver figura en el examen]" al inicio`,
+      `- Matemáticas con procedimiento: type "open"`,
+      `- correctOption: 0=A 1=B 2=C 3=D`,
+      `- points: ${isMath ? '10' : '5'}`,
+      ``,
+      `Respondé SOLO con JSON array, sin markdown:`,
+      `[{"id":"q1","text":"...","type":"multiple","options":["A","B","C","D"],"correctOption":0,"points":${isMath ? '10' : '5'}}]`,
     ].join('\n')
-
-    userContent.push({ type: 'text', text: prompt })
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -80,15 +63,15 @@ export default async (request: Request, _context: Context) => {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 8000,
-        system: `Sos una tutora experta en ${subject} de Costa Rica. Tu única tarea es extraer las preguntas numeradas de exámenes del MEP, ignorando todo el texto que no sea una pregunta. Respondés ÚNICAMENTE con el JSON array solicitado, sin markdown ni texto adicional.`,
-        messages: [{ role: 'user', content: userContent }],
+        model: 'claude-haiku-4-5-20251001', // Faster model for extraction
+        max_tokens: 4000,
+        system: `Extraés preguntas numeradas de exámenes del MEP de Costa Rica. Respondés ÚNICAMENTE con JSON array válido, sin markdown ni texto adicional.`,
+        messages: [{ role: 'user', content: prompt }],
       }),
     })
 
     const data = await response.json()
-    console.log('Status:', response.status, '| Mode:', hasImages ? 'vision' : 'text', '| Preview:', data.content?.[0]?.text?.slice(0, 300))
+    console.log('Status:', response.status, '| Chunk:', chunkInfo ?? 'full', '| Preview:', data.content?.[0]?.text?.slice(0, 150))
 
     return new Response(JSON.stringify(data), {
       status: response.status,
