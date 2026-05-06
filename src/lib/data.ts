@@ -18,6 +18,7 @@ export interface Lesson {
   content?: string       // texto enriquecido
   fileUrl?: string       // URL del PDF en Storage
   fileName?: string
+  examKey?: string       // key for matching images: normalize(folder_filename)
   youtubeUrl?: string    // link de YouTube
   pageImages?: string[]  // URLs de páginas extraídas como imágenes
   assignedTo: string[]
@@ -40,7 +41,7 @@ export interface Submission {
 // ── Mappers ──────────────────────────────────────────────────────
 const toStudent  = (r: any): Student  => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, grade: r.grade, level: r.level, pin: r.pin, createdAt: r.created_at })
 const toPractice = (r: any): Practice => ({ id: r.id, title: r.title, subject: r.subject, description: r.description ?? '', questions: r.questions ?? [], assignedTo: r.assigned_to ?? [], dueDate: r.due_date ?? undefined, createdAt: r.created_at, isActive: r.is_active, lessonId: r.lesson_id ?? undefined })
-const toLesson   = (r: any): Lesson   => ({ id: r.id, title: r.title, subject: r.subject, content: r.content ?? undefined, fileUrl: r.file_url ?? undefined, fileName: r.file_name ?? undefined, youtubeUrl: r.youtube_url ?? undefined, pageImages: r.page_images ?? undefined, assignedTo: r.assigned_to ?? [], isActive: r.is_active, createdAt: r.created_at })
+const toLesson   = (r: any): Lesson   => ({ id: r.id, title: r.title, subject: r.subject, content: r.content ?? undefined, fileUrl: r.file_url ?? undefined, fileName: r.file_name ?? undefined, examKey: r.exam_key ?? undefined, youtubeUrl: r.youtube_url ?? undefined, pageImages: r.page_images ?? undefined, assignedTo: r.assigned_to ?? [], isActive: r.is_active, createdAt: r.created_at })
 const toSub      = (r: any): Submission => ({ id: r.id, practiceId: r.practice_id, studentId: r.student_id, answers: r.answers ?? [], submittedAt: r.submitted_at, score: r.score ?? undefined, reviewed: r.reviewed, teacherNote: r.teacher_note ?? undefined, antiCheatFlags: r.anti_cheat_flags ?? [] })
 
 // ── DB ───────────────────────────────────────────────────────────
@@ -75,13 +76,13 @@ export const db = {
     },
     async add(l: Omit<Lesson, 'id'|'createdAt'>): Promise<Lesson> {
       const { data, error } = await supabase.from('lessons')
-        .insert({ title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, youtube_url: l.youtubeUrl ?? null, page_images: l.pageImages ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
+        .insert({ title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, exam_key: l.examKey ?? null, youtube_url: l.youtubeUrl ?? null, page_images: l.pageImages ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
         .select().single()
       if (error) throw error; return toLesson(data)
     },
     async update(l: Lesson): Promise<void> {
       const { error } = await supabase.from('lessons')
-        .update({ title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, youtube_url: l.youtubeUrl ?? null, page_images: l.pageImages ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
+        .update({ title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, exam_key: l.examKey ?? null, youtube_url: l.youtubeUrl ?? null, page_images: l.pageImages ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
         .eq('id', l.id)
       if (error) throw error
     },
@@ -221,14 +222,15 @@ export const qImages = {
     return null
   },
 
-  // Normalize any string to "mep_GRADE_YEAR" format
-  // Works for both image folder names and lesson titles
+  // Normalize folder+filename to a consistent exam key
+  // Both PDF ZIP and image ZIP use same logic: normalize(folder_filename)
   buildExamKey(input: string): string {
-    const s = input.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-    const gradeMatch = s.match(/(\d{1,2})/)
-    const yearMatch  = s.match(/(20\d{2})/)
-    if (gradeMatch && yearMatch) return `mep_${gradeMatch[1]}_${yearMatch[1]}`
-    // fallback: just normalize
-    return s.replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+    return input
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove accents
+      .toLowerCase()
+      .replace(/\.pdf$/i, '')           // remove .pdf extension
+      .replace(/[^a-z0-9]+/g, '_')      // non-alphanumeric → _
+      .replace(/_+/g, '_')              // collapse underscores
+      .replace(/^_|_$/g, '')            // trim
   },
 }

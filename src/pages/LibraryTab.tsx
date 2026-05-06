@@ -252,12 +252,17 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
         const file    = new File([blob], j.name, { type: 'application/pdf' })
         const { url } = await db.storage.uploadFile(file)
 
+        // Build examKey: normalize(folderName_fileNameWithoutExt)
+        const jFolder  = j.path.split('/').slice(-2, -1)[0] ?? ''
+        const jBase    = j.name.replace(/\.pdf$/i, '')
+        const jExamKey = qImages.buildExamKey(`${jFolder}_${jBase}`)
         await db.lessons.add({
           title:      friendlyTitle(j.path),
           subject:    j.subject,
           content:    `Examen MEP — ${j.grade}. Descargá el PDF para verlo completo.`,
           fileUrl:    url,
           fileName:   j.name,
+          examKey:    jExamKey,
           pageImages: [],
           assignedTo: [],
           isActive:   false,
