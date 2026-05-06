@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react'
 import JSZip from 'jszip'
-import { extractPdfPages } from '../lib/pdfExtract'
 import type { Lesson, Student, Subject, Grade } from '../lib/data'
 import { db, qImages } from '../lib/data'
 import CreatePracticeModal from './CreatePracticeModal'
@@ -157,7 +156,20 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
       try {
         const blob    = await zip.file(j.name)!.async('blob')
         const imgFile = new File([blob], parts[parts.length - 1], { type: 'image/png' })
-        const { url } = await db.storage.uploadFile(imgFile)
+
+        // Retry up to 3 times on timeout
+        let url = ''
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const res = await db.storage.uploadFile(imgFile)
+            url = res.url
+            break
+          } catch (e: any) {
+            if (attempt < 2) {
+              await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+            } else throw e
+          }
+        }
 
         await qImages.add({
           examKey,
@@ -171,7 +183,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
         updated[i] = { ...j, status: 'error', examKey }
       }
       setImgJobs([...updated])
-      await new Promise(r => setTimeout(r, 200))
+      await new Promise(r => setTimeout(r, 800))
     }
 
     setImgUploading(false)
@@ -239,23 +251,14 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
         const blob    = await zip.file(j.path)!.async('blob')
         const file    = new File([blob], j.name, { type: 'application/pdf' })
         const { url } = await db.storage.uploadFile(file)
-        // Extract pages as images
-        let pageImages: string[] = []
-        try {
-          const pages = await extractPdfPages(file, 20)
-          for (const { page, blob: imgBlob } of pages) {
-            const imgFile = new File([imgBlob], `${j.name}_p${page}.jpg`, { type: 'image/jpeg' })
-            const { url: imgUrl } = await db.storage.uploadFile(imgFile)
-            pageImages.push(imgUrl)
-          }
-        } catch (_e) { console.warn('No se pudieron extraer páginas:', _e) }
+
         await db.lessons.add({
           title:      friendlyTitle(j.path),
           subject:    j.subject,
           content:    `Examen MEP — ${j.grade}. Descargá el PDF para verlo completo.`,
           fileUrl:    url,
           fileName:   j.name,
-          pageImages,
+          pageImages: [],
           assignedTo: [],
           isActive:   false,
         })

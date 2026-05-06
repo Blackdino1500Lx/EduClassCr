@@ -203,13 +203,21 @@ export const qImages = {
     return images.find(img => questionNum >= img.fromQ && questionNum <= img.toQ)
   },
 
-  // Parse filename like "preguntas_21_a_23" → { from: 21, to: 23 }
+  // Parse filename like "q11_12" or "q21_22_23" → { from: 11, to: 12 } or { from: 21, to: 23 }
+  // Also handles old format "preguntas_21_a_23"
   parseRange(filename: string): { from: number; to: number } | null {
-    const m = filename.match(/preguntas?[_\s]+(\d+)[_\s]+a[_\s]+(\d+)/i)
-    if (m) return { from: parseInt(m[1]), to: parseInt(m[2]) }
-    // Single question: "pregunta_5" or "p5"
-    const s = filename.match(/preguntas?[_\s]+(\d+)/i)
-    if (s) { const n = parseInt(s[1]); return { from: n, to: n } }
+    // New format: q11_12.png or q21_22_23.png
+    const newFmt = filename.match(/^q(\d+(?:_\d+)*)/)
+    if (newFmt) {
+      const nums = newFmt[1].split('_').map(Number)
+      return { from: Math.min(...nums), to: Math.max(...nums) }
+    }
+    // Old format: preguntas_21_a_23
+    const oldFmt = filename.match(/preguntas?[_\s]+(\d+)[_\s]+a[_\s]+(\d+)/i)
+    if (oldFmt) return { from: parseInt(oldFmt[1]), to: parseInt(oldFmt[2]) }
+    // Single: pregunta_5
+    const single = filename.match(/preguntas?[_\s]+(\d+)/i)
+    if (single) { const n = parseInt(single[1]); return { from: n, to: n } }
     return null
   },
 
