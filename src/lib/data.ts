@@ -158,3 +158,63 @@ export const auth = {
     return () => subscription.unsubscribe()
   },
 }
+
+// ── Question Images ───────────────────────────────────────────────
+export interface QuestionImage {
+  id: string
+  examKey: string
+  fromQ: number
+  toQ: number
+  imageUrl: string
+  imageName: string
+  createdAt: string
+}
+
+const toQImage = (r: any): QuestionImage => ({
+  id: r.id, examKey: r.exam_key, fromQ: r.from_q, toQ: r.to_q,
+  imageUrl: r.image_url, imageName: r.image_name, createdAt: r.created_at,
+})
+
+// Add to db object — extend at runtime
+export const qImages = {
+  async add(q: Omit<QuestionImage, 'id'|'createdAt'>): Promise<QuestionImage> {
+    const { supabase } = await import('./supabase')
+    const { data, error } = await supabase.from('question_images')
+      .insert({ exam_key: q.examKey, from_q: q.fromQ, to_q: q.toQ, image_url: q.imageUrl, image_name: q.imageName })
+      .select().single()
+    if (error) throw error; return toQImage(data)
+  },
+
+  async forExam(examKey: string): Promise<QuestionImage[]> {
+    const { supabase } = await import('./supabase')
+    const { data, error } = await supabase.from('question_images')
+      .select('*').eq('exam_key', examKey)
+    if (error) throw error; return (data ?? []).map(toQImage)
+  },
+
+  async deleteForExam(examKey: string) {
+    const { supabase } = await import('./supabase')
+    const { error } = await supabase.from('question_images').delete().eq('exam_key', examKey)
+    if (error) throw error
+  },
+
+  // Find image that covers question number N
+  findForQuestion(images: QuestionImage[], questionNum: number): QuestionImage | undefined {
+    return images.find(img => questionNum >= img.fromQ && questionNum <= img.toQ)
+  },
+
+  // Parse filename like "preguntas_21_a_23" → { from: 21, to: 23 }
+  parseRange(filename: string): { from: number; to: number } | null {
+    const m = filename.match(/preguntas?[_\s]+(\d+)[_\s]+a[_\s]+(\d+)/i)
+    if (m) return { from: parseInt(m[1]), to: parseInt(m[2]) }
+    // Single question: "pregunta_5" or "p5"
+    const s = filename.match(/preguntas?[_\s]+(\d+)/i)
+    if (s) { const n = parseInt(s[1]); return { from: n, to: n } }
+    return null
+  },
+
+  // Build exam key from folder name: "Examenes_de_Mep_7_2023" or "Examenes Mep 8/2023"
+  buildExamKey(folderName: string): string {
+    return folderName.replace(/[\s\/\\]+/g, '_').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()
+  },
+}

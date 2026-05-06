@@ -2,11 +2,11 @@ import { useState, useRef } from 'react'
 import JSZip from 'jszip'
 import { extractPdfPages } from '../lib/pdfExtract'
 import type { Lesson, Student, Subject, Grade } from '../lib/data'
-import { db } from '../lib/data'
+import { db, qImages } from '../lib/data'
 import CreatePracticeModal from './CreatePracticeModal'
 import {
-  Upload, FileText, Search, Eye, EyeOff, Users, X,
-  Loader2, AlertTriangle, CheckCircle, FolderOpen, Filter, Sparkles
+  Upload, FileText, Search, Eye, EyeOff, Users, X, AlertTriangle,
+  Loader2, CheckCircle, FolderOpen, Filter, Sparkles
 } from 'lucide-react'
 
 interface Props { lessons: Lesson[]; students: Student[]; reload: () => void }
@@ -117,8 +117,64 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
   const [search, setSearch]           = useState('')
   const [assignTarget, setAssignTarget] = useState<Lesson | null>(null)
   const [createTarget, setCreateTarget] = useState<Lesson | null>(null)
+  const imgZipRef = useRef<HTMLInputElement>(null)
+  const [imgJobs, setImgJobs] = useState<{name:string; status:'pending'|'uploading'|'done'|'error'|'skipped'; examKey?:string}[]>([])
+  const [imgUploading, setImgUploading] = useState(false)
   const zipRef = useRef<HTMLInputElement>(null)
   const pdfRef = useRef<HTMLInputElement>(null)
+
+  // ── Process Image ZIP ─────────────────────────────────────────
+  const handleImgZip = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const zip  = await JSZip.loadAsync(file)
+    const jobs: {name:string; status:'pending'|'uploading'|'done'|'error'|'skipped'; examKey?:string}[] = []
+
+    zip.forEach((relativePath, entry) => {
+      if (entry.dir) return
+      const ext = relativePath.toLowerCase()
+      if (!ext.endsWith('.png') && !ext.endsWith('.jpg') && !ext.endsWith('.jpeg')) return
+      if (relativePath.includes('__MACOSX')) return
+      jobs.push({ name: relativePath, status: 'pending' })
+    })
+
+    setImgJobs(jobs); setImgUploading(true)
+    const updated = [...jobs]
+
+    for (let i = 0; i < updated.length; i++) {
+      const j = updated[i]
+      const parts     = j.name.split('/')
+      const folderName = parts.length > 1 ? parts[parts.length - 2] : ''
+      const fileName   = parts[parts.length - 1].replace(/\.[^.]+$/, '') // no extension
+      const examKey    = qImages.buildExamKey(folderName)
+      const range      = qImages.parseRange(fileName)
+
+      updated[i] = { ...j, status: 'uploading', examKey }
+      setImgJobs([...updated])
+
+      try {
+        const blob    = await zip.file(j.name)!.async('blob')
+        const imgFile = new File([blob], parts[parts.length - 1], { type: 'image/png' })
+        const { url } = await db.storage.uploadFile(imgFile)
+
+        await qImages.add({
+          examKey,
+          fromQ:     range?.from ?? 0,
+          toQ:       range?.to ?? 0,
+          imageUrl:  url,
+          imageName: fileName,
+        })
+        updated[i] = { ...j, status: 'done', examKey }
+      } catch (err) {
+        updated[i] = { ...j, status: 'error', examKey }
+      }
+      setImgJobs([...updated])
+      await new Promise(r => setTimeout(r, 200))
+    }
+
+    setImgUploading(false)
+    e.target.value = ''
+  }
 
   // ── Process ZIP ────────────────────────────────────────────────
   const handleZip = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -298,6 +354,49 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
           <input ref={pdfRef} type="file" accept=".pdf" style={{display:'none'}} onChange={handlePdf}/>
         </div>
       </div>
+
+      {/* Image ZIP upload zone */}
+      <div className="library-upload-zone" style={{marginTop:12, background:'#f0f9ff', borderColor:'#bfdbfe'}}>
+        <div className="lup-option">
+          <div className="lup-icon">🖼️</div>
+          <div className="lup-text">
+            <strong>Subir ZIP de imágenes</strong>
+            <span>Imágenes de figuras y gráficas — se asocian automáticamente a cada examen por nombre de carpeta</span>
+          </div>
+          <button className="btn-outline" onClick={() => imgZipRef.current?.click()} disabled={imgUploading}>
+            {imgUploading ? <><Loader2 size={14} className="spin"/> Subiendo...</> : <><Upload size={14}/> Elegir ZIP de imágenes</>}
+          </button>
+          <input ref={imgZipRef} type="file" accept=".zip" style={{display:'none'}} onChange={handleImgZip}/>
+        </div>
+      </div>
+
+      {/* Image upload progress */}
+      {imgJobs.length > 0 && (
+        <div className="upload-progress-card" style={{marginTop:12}}>
+          <div className="upc-header">
+            <span className="upc-title">{imgUploading ? '⏳ Subiendo imágenes...' : '✅ Imágenes cargadas'}</span>
+            <span className="upc-summary">
+              <span className="badge-success">{imgJobs.filter(j=>j.status==='done').length} subidas</span>
+              {imgJobs.filter(j=>j.status==='error').length > 0 && <span className="badge-error">{imgJobs.filter(j=>j.status==='error').length} errores</span>}
+            </span>
+          </div>
+          <div className="upc-list">
+            {imgJobs.map((j,i) => (
+              <div key={i} className={`upc-item upc-${j.status}`}>
+                <span className="upc-status-icon">
+                  {j.status==='done' && <CheckCircle size={13}/>}
+                  {j.status==='uploading' && <Loader2 size={13} className="spin"/>}
+                  {j.status==='error' && <AlertTriangle size={13}/>}
+                  {j.status==='pending' && '⬜'}
+                </span>
+                <span className="upc-name">{j.name.split('/').pop()}</span>
+                {j.examKey && <span className="upc-meta">→ {j.examKey}</span>}
+              </div>
+            ))}
+          </div>
+          <p className="hint-text" style={{marginTop:8}}>Las imágenes quedan asociadas al examen. Al crear una práctica, se adjuntan automáticamente según el número de pregunta.</p>
+        </div>
+      )}
 
       {/* Upload progress */}
       {jobs.length > 0 && (

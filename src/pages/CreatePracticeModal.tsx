@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { Lesson, Student, Question } from '../lib/data'
-import { db } from '../lib/data'
-import { extractTextFromUrl, renderPdfPagesToBase64 } from '../lib/pdfExtract'
-import { X, Sparkles, Loader2, AlertTriangle, Check, Trash2, Plus, Edit3, Image, ChevronDown, ChevronUp } from 'lucide-react'
+import { db, qImages } from '../lib/data'
+import { extractTextFromUrl } from '../lib/pdfExtract'
+import { X, Sparkles, Loader2, AlertTriangle, Check, Trash2, Plus, Edit3, Image } from 'lucide-react'
 
 interface Props {
   lesson: Lesson; students: Student[]
@@ -11,84 +11,40 @@ interface Props {
 type Step = 'extracting' | 'generating' | 'review' | 'saving' | 'done' | 'error'
 const uid = () => Math.random().toString(36).slice(2, 10)
 
-function ImagePicker({ pageImages, onSelect, onClose }: {
-  pageImages: string[]; onSelect: (url: string) => void; onClose: () => void
-}) {
-  return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-card" style={{maxWidth:700}}>
-        <div className="modal-header">
-          <h3>Elegir página del PDF</h3>
-          <button className="icon-btn" onClick={onClose}><X size={18}/></button>
-        </div>
-        <div className="modal-body">
-          <p className="hint-text" style={{marginBottom:12}}>Seleccioná la página que corresponde a esta pregunta:</p>
-          <div className="page-images-grid">
-            {pageImages.map((url, i) => (
-              <div key={i} className="page-thumb" onClick={() => { onSelect(url); onClose() }}>
-                <img src={url} alt={`Página ${i+1}`}/>
-                <span>Pág. {i+1}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function CreatePracticeModal({ lesson, students, onClose, onSaved }: Props) {
   const [step, setStep]               = useState<Step>('extracting')
   const [progress, setProgress]       = useState('')
   const [questions, setQuestions]     = useState<Question[]>([])
   const [editingQ, setEditingQ]       = useState<string | null>(null)
-  const [pickingImageFor, setPickingImageFor] = useState<string | null>(null)
-  const [showPages, setShowPages]     = useState(false)
   const [error, setError]             = useState('')
   const [title, setTitle]             = useState(`Práctica · ${lesson.title}`)
   const [description, setDescription] = useState(`Basada en: ${lesson.fileName ?? lesson.title}`)
   const [dueDate, setDueDate]         = useState('')
   const [assignedTo, setAssignedTo]   = useState<string[]>([])
-
-  const pageImages = lesson.pageImages ?? []
+  const [uploadingImg, setUploadingImg] = useState<string | null>(null)
 
   useState(() => { startProcess() })
 
   async function startProcess() {
     setStep('extracting'); setError('')
-
     try {
       let pdfText = ''
-      let pageImages: string[] = []
-
       if (lesson.fileUrl) {
-        // Step 1: Try to extract text first (fast, works for text-based PDFs)
         setProgress('Extrayendo texto del PDF...')
         try {
           pdfText = await extractTextFromUrl(lesson.fileUrl)
           console.log('Texto extraído:', pdfText.length, 'caracteres')
         } catch (e) {
-          console.warn('No se pudo extraer texto:', e)
-        }
-
-        // Step 2: If no text (scanned PDF), render pages as images for Claude vision
-        if (!pdfText || pdfText.trim().length < 100) {
-          setProgress('PDF escaneado detectado — renderizando páginas como imágenes...')
-          try {
-            pageImages = await renderPdfPagesToBase64(lesson.fileUrl, 10)
-            console.log('Páginas renderizadas:', pageImages.length)
-          } catch (e) {
-            console.warn('No se pudieron renderizar páginas:', e)
-          }
+          console.warn('Error extrayendo texto:', e)
         }
       }
 
-      // Step 3: Send to Netlify function → Claude
-      setStep('generating')
-      setProgress('Claude está analizando el examen y extrayendo todas las preguntas...')
+      if (!pdfText || pdfText.trim().length < 50) {
+        throw new Error('No se pudo extraer texto del PDF. Asegurate de que el PDF tenga texto seleccionable (no sea una imagen escaneada).')
+      }
 
-      // Limit text to avoid 502 — Claude works well with first 8000 chars
-      const textToSend = pdfText.slice(0, 8000)
+      setStep('generating')
+      setProgress('Claude está analizando el examen...')
 
       const response = await fetch('/.netlify/functions/generate-practice', {
         method: 'POST',
@@ -97,8 +53,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
           subject:  lesson.subject,
           title:    lesson.title,
           fileName: lesson.fileName,
-          pdfText:  textToSend,
-          pageImages: [], // images sent separately via Storage URLs
+          pdfText:  pdfText.slice(0, 10000),
         }),
       })
 
@@ -117,16 +72,36 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
       if (!jsonMatch) throw new Error(`Formato inesperado: ${raw.slice(0, 200)}`)
 
       const parsed = JSON.parse(jsonMatch[0])
-      const qs: Question[] = parsed.map((q: any) => ({
-        id:            uid(),
-        text:          String(q.text ?? ''),
-        type:          q.type === 'open' ? 'open' : 'multiple',
-        options:       q.options ?? (q.type !== 'open' ? ['', '', '', ''] : undefined),
-        correctOption: typeof q.correctOption === 'number' ? q.correctOption : 0,
-        points:        Number(q.points) || 5,
-      }))
+      // Build exam key from lesson title/filename to find matching images
+      // e.g. "Examenes de Mep 7/2023.pdf" → "examenes_de_mep_7_2023"
+      const baseFolder = lesson.title.replace(/·.*/, '').trim().replace(/\s+/g, '_')
+      const year = (lesson.fileName ?? '').replace('.pdf', '').replace(/\s/g, '_')
+      const examKey = qImages.buildExamKey(`${baseFolder}_${year}`)
+      console.log('Looking for images with examKey:', examKey)
+      let imgs: Awaited<ReturnType<typeof qImages.forExam>> = []
+      try {
+        imgs = await qImages.forExam(examKey)
+        console.log('Found', imgs.length, 'image mappings for', examKey)
+      } catch (e) {
+        console.warn('No images found for this exam:', e)
+      }
 
-      setQuestions(qs)
+      const parsedQs: Question[] = parsed.map((q: any, idx: number) => {
+        // Try to get question number from text "1)" "1." etc, fallback to index
+        const textMatch = String(q.text ?? '').match(/^\s*(\d+)[.)\s]/)
+        const questionNum = textMatch ? parseInt(textMatch[1]) : idx + 1
+        const img = qImages.findForQuestion(imgs, questionNum)
+        return {
+          id:            uid(),
+          text:          String(q.text ?? ''),
+          type:          q.type === 'open' ? 'open' : 'multiple',
+          options:       q.options ?? (q.type !== 'open' ? ['', '', '', ''] : undefined),
+          correctOption: typeof q.correctOption === 'number' ? q.correctOption : 0,
+          points:        Number(q.points) || 5,
+          imageUrl:      img?.imageUrl,
+        }
+      })
+      setQuestions(parsedQs)
       setStep('review')
     } catch (e: any) {
       setError(e.message ?? 'Error procesando el PDF')
@@ -146,6 +121,19 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
       options: isMath ? undefined : ['', '', '', ''],
       correctOption: 0,
     }])
+  }
+
+  // Upload image for a specific question
+  const handleImageUpload = async (qId: string, file: File) => {
+    setUploadingImg(qId)
+    try {
+      const { url } = await db.storage.uploadFile(file)
+      updateQ(qId, { imageUrl: url })
+    } catch (e) {
+      alert('Error subiendo la imagen. Intentá de nuevo.')
+    } finally {
+      setUploadingImg(null)
+    }
   }
 
   const save = async () => {
@@ -168,6 +156,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
   }
 
   const totalPoints = questions.reduce((a, q) => a + (Number(q.points) || 0), 0)
+  const hasGraphics  = questions.some(q => q.text.includes('[Ver figura'))
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -216,6 +205,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
         {step === 'review' && (
           <>
             <div className="modal-body">
+              {/* Metadata */}
               <div className="create-practice-meta">
                 <div className="field full"><label>Título</label>
                   <input value={title} onChange={e => setTitle(e.target.value)}/>
@@ -228,6 +218,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                 </div>
               </div>
 
+              {/* Assign */}
               <div className="field full" style={{marginBottom:20}}>
                 <label>Asignar a alumnos</label>
                 <div className="assign-grid">
@@ -246,34 +237,22 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                 </div>
               </div>
 
-              {/* Page images notice */}
-              {pageImages.length > 0 && (
+              {/* Graphics notice */}
+              {hasGraphics && (
                 <div className="math-graphics-notice">
                   <Image size={15}/>
-                  <span><strong>{pageImages.length} páginas</strong> disponibles. Usá el botón 🖼️ en cada pregunta para adjuntar la página correspondiente.</span>
-                  <button className="btn-outline sm" onClick={() => setShowPages(v => !v)}>
-                    {showPages ? <><ChevronUp size={12}/> Ocultar</> : <><ChevronDown size={12}/> Ver páginas</>}
-                  </button>
+                  <span>Algunas preguntas tienen <strong>[Ver figura]</strong> — podés subir la imagen correspondiente con el botón 🖼️ en cada pregunta.</span>
                 </div>
               )}
 
-              {showPages && pageImages.length > 0 && (
-                <div className="page-images-grid" style={{marginBottom:16}}>
-                  {pageImages.map((url, i) => (
-                    <div key={i} className="page-thumb">
-                      <img src={url} alt={`Página ${i+1}`}/>
-                      <span>Pág. {i+1}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
+              {/* AI banner */}
               <div className="ai-generated-banner">
                 <Sparkles size={14}/>
-                <span>IA extrajo <strong>{questions.length} preguntas</strong> del PDF · {totalPoints} pts totales. Revisá y editá antes de guardar.</span>
+                <span>IA extrajo <strong>{questions.length} preguntas</strong> · {totalPoints} pts totales. Revisá y editá antes de guardar.</span>
                 <button className="btn-outline sm" onClick={addQ}><Plus size={12}/> Agregar</button>
               </div>
 
+              {/* Questions */}
               <div className="questions-list" style={{marginTop:12}}>
                 {questions.map((q, idx) => (
                   <div className="question-card" key={q.id}>
@@ -284,21 +263,24 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                           <input type="number" min={1} max={100} value={q.points} style={{width:56}}
                             onChange={e => updateQ(q.id,{points:+e.target.value})}/>
                         </div>
-                        {pageImages.length > 0 && (
-                          <button className={`icon-btn ${q.imageUrl?'active-img-btn':''}`}
-                            title="Adjuntar página del PDF"
-                            onClick={() => setPickingImageFor(q.id)}>
-                            <Image size={14}/>
-                          </button>
-                        )}
+                        {/* Image upload button */}
+                        <label className={`icon-btn ${q.imageUrl?'active-img-btn':''}`} title="Adjuntar imagen" style={{cursor:'pointer'}}>
+                          {uploadingImg === q.id
+                            ? <Loader2 size={14} className="spin"/>
+                            : <Image size={14}/>
+                          }
+                          <input type="file" accept="image/*" style={{display:'none'}}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(q.id, f) }}/>
+                        </label>
                         <button className="icon-btn" onClick={() => setEditingQ(editingQ===q.id?null:q.id)}><Edit3 size={14}/></button>
                         <button className="icon-btn danger sm" onClick={() => removeQ(q.id)}><Trash2 size={14}/></button>
                       </div>
                     </div>
 
+                    {/* Image preview */}
                     {q.imageUrl && (
                       <div className="q-image-preview">
-                        <img src={q.imageUrl} alt="Página adjunta"/>
+                        <img src={q.imageUrl} alt="Figura adjunta"/>
                         <button className="remove-img-btn" onClick={() => updateQ(q.id,{imageUrl:undefined})}>
                           <X size={12}/> Quitar
                         </button>
@@ -357,14 +339,6 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
           </>
         )}
       </div>
-
-      {pickingImageFor && pageImages.length > 0 && (
-        <ImagePicker
-          pageImages={pageImages}
-          onSelect={url => updateQ(pickingImageFor, {imageUrl: url})}
-          onClose={() => setPickingImageFor(null)}
-        />
-      )}
     </div>
   )
 }
