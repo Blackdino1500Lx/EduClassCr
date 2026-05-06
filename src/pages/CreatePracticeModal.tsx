@@ -75,9 +75,8 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
       const parsed = JSON.parse(jsonMatch[0])
       // Build exam key from lesson title/filename to find matching images
       // e.g. "Examenes de Mep 7/2023.pdf" → "examenes_de_mep_7_2023"
-      const baseFolder = lesson.title.replace(/·.*/, '').trim().replace(/\s+/g, '_')
-      const year = (lesson.fileName ?? '').replace('.pdf', '').replace(/\s/g, '_')
-      const examKey = qImages.buildExamKey(`${baseFolder}_${year}`)
+      // Build normalized key: "mep_GRADE_YEAR" — matches what image ZIP generates
+      const examKey = qImages.buildExamKey(`${lesson.title} ${lesson.fileName ?? ''}`)
       console.log('Looking for images with examKey:', examKey)
       let imgs: Awaited<ReturnType<typeof qImages.forExam>> = []
       try {

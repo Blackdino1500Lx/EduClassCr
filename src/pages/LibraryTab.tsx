@@ -147,6 +147,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
       const parts     = j.name.split('/')
       const folderName = parts.length > 1 ? parts[parts.length - 2] : ''
       const fileName   = parts[parts.length - 1].replace(/\.[^.]+$/, '') // no extension
+      // folderName like "Examenes_de_Mep_7_2023" → "mep_7_2023"
       const examKey    = qImages.buildExamKey(folderName)
       const range      = qImages.parseRange(fileName)
 

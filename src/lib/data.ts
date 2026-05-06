@@ -213,8 +213,14 @@ export const qImages = {
     return null
   },
 
-  // Build exam key from folder name: "Examenes_de_Mep_7_2023" or "Examenes Mep 8/2023"
-  buildExamKey(folderName: string): string {
-    return folderName.replace(/[\s\/\\]+/g, '_').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()
+  // Normalize any string to "mep_GRADE_YEAR" format
+  // Works for both image folder names and lesson titles
+  buildExamKey(input: string): string {
+    const s = input.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    const gradeMatch = s.match(/(\d{1,2})/)
+    const yearMatch  = s.match(/(20\d{2})/)
+    if (gradeMatch && yearMatch) return `mep_${gradeMatch[1]}_${yearMatch[1]}`
+    // fallback: just normalize
+    return s.replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
   },
 }
