@@ -23,6 +23,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
   const [assignedTo, setAssignedTo]   = useState<string[]>([])
   const [uploadingImg, setUploadingImg] = useState<string | null>(null)
 
+
   useState(() => { startProcess() })
 
   async function startProcess() {
@@ -53,7 +54,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
           subject:  lesson.subject,
           title:    lesson.title,
           fileName: lesson.fileName,
-          pdfText:  pdfText.slice(0, 10000),
+          pdfText:  pdfText.slice(0, 6000),
         }),
       })
 
@@ -82,6 +83,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
       try {
         imgs = await qImages.forExam(examKey)
         console.log('Found', imgs.length, 'image mappings for', examKey)
+
       } catch (e) {
         console.warn('No images found for this exam:', e)
       }

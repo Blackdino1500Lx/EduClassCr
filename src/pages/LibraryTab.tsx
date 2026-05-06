@@ -120,6 +120,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
   const imgZipRef = useRef<HTMLInputElement>(null)
   const [imgJobs, setImgJobs] = useState<{name:string; status:'pending'|'uploading'|'done'|'error'|'skipped'; examKey?:string}[]>([])
   const [imgUploading, setImgUploading] = useState(false)
+  const [imgSummary, setImgSummary] = useState<{total:number; exams:string[]} | null>(null)
   const zipRef = useRef<HTMLInputElement>(null)
   const pdfRef = useRef<HTMLInputElement>(null)
 
@@ -174,6 +175,10 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
 
     setImgUploading(false)
     e.target.value = ''
+    // Build summary
+    const done = updated.filter(j => j.status === 'done')
+    const exams = [...new Set(done.map(j => j.examKey ?? '').filter(Boolean))]
+    setImgSummary({ total: done.length, exams })
   }
 
   // ── Process ZIP ────────────────────────────────────────────────
@@ -394,7 +399,20 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
               </div>
             ))}
           </div>
-          <p className="hint-text" style={{marginTop:8}}>Las imágenes quedan asociadas al examen. Al crear una práctica, se adjuntan automáticamente según el número de pregunta.</p>
+        </div>
+      )}
+
+      {/* Persistent summary after upload */}
+      {imgSummary && !imgUploading && (
+        <div className="img-summary-banner">
+          <CheckCircle size={16} style={{color:'var(--success)', flexShrink:0}}/>
+          <div>
+            <strong>{imgSummary.total} imágenes</strong> asociadas a {imgSummary.exams.length} examen{imgSummary.exams.length !== 1 ? 'es' : ''}.
+            Al crear una práctica, se adjuntan automáticamente según el número de pregunta.
+            <div className="img-exam-list">
+              {imgSummary.exams.map(e => <span key={e} className="exam-chip">{e.replace(/_/g,' ')}</span>)}
+            </div>
+          </div>
         </div>
       )}
 
