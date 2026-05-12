@@ -1,9 +1,3 @@
-/**
- * Parse questions from MEP exam PDF text.
- * Extracts numbered questions with A/B/C/D options.
- * Zero AI cost — pure regex.
- */
-
 export interface ParsedQuestion {
   num:     number
   text:    string
@@ -15,19 +9,20 @@ const SKIP_PATTERNS = [
   /^Matemáticas (Sétimo|Octavo|Noveno|Bachillerato)/,
   /^SELECCIÓN ÚNICA/,
   /^\d+ ÍTEMS$/,
-  /^Recomendaciones/,
   /^ÍTEMS$/,
+  /^MINISTERIO/,
+  /^DIRECCIÓN/,
+  /^DEPARTAMENTO/,
+  /^Recomendaciones/,
   /^Tercer Ciclo/,
   /^General Básica/,
   /^Convenio MEP/,
+  /^Programa III/,
 ]
 
 export function parseQuestionsFromText(rawText: string): ParsedQuestion[] {
-  // Split into lines, strip empty
   const allLines = rawText.split('\n').map(l => l.trim()).filter(Boolean)
-
-  // Remove lines matching skip patterns
-  const lines = allLines.filter(l => !SKIP_PATTERNS.some(p => p.test(l)))
+  const lines    = allLines.filter(l => !SKIP_PATTERNS.some(p => p.test(l)))
 
   const questions: ParsedQuestion[] = []
   let current: ParsedQuestion | null = null
@@ -37,11 +32,11 @@ export function parseQuestionsFromText(rawText: string): ParsedQuestion[] {
   while (i < lines.length) {
     const line = lines[i]
 
-    // Match question: "10)" or "10) texto"
-    const qMatch = line.match(/^(\d+)\)\s*(.*)/)
+    // Question: "10)" or "10) texto" — NOT "A)" options
+    const qMatch = /^(\d+)\)\s*(.*)/.exec(line)
     if (qMatch && !/^[A-D]\)/.test(line)) {
       if (current && current.options.length >= 3) questions.push(current)
-      current  = { num: parseInt(qMatch[1]), text: qMatch[2].trim(), options: [] }
+      current   = { num: parseInt(qMatch[1]), text: qMatch[2].trim(), options: [] }
       inOptions = false
       i++
       continue
@@ -49,8 +44,8 @@ export function parseQuestionsFromText(rawText: string): ParsedQuestion[] {
 
     if (!current) { i++; continue }
 
-    // Match option: "A)" or "A) texto"
-    const optMatch = line.match(/^([A-D])\)\s*(.*)/)
+    // Option: "A)" or "A) texto"
+    const optMatch = /^([A-D])\)\s*(.*)/.exec(line)
     if (optMatch) {
       inOptions = true
       const val: string[] = optMatch[2] ? [optMatch[2]] : []
@@ -64,15 +59,12 @@ export function parseQuestionsFromText(rawText: string): ParsedQuestion[] {
       continue
     }
 
-    // Accumulate question text
     if (!inOptions) {
       current.text += (current.text ? ' ' : '') + line
     }
-
     i++
   }
 
   if (current && current.options.length >= 3) questions.push(current)
-
   return questions
 }
