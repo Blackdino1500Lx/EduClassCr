@@ -2,13 +2,14 @@ import { useState } from 'react'
 import type { Lesson, Student, Question } from '../lib/data'
 import { db, qImages } from '../lib/data'
 import { extractTextFromUrl } from '../lib/pdfExtract'
-import { X, Sparkles, Loader2, AlertTriangle, Check, Trash2, Plus, Edit3, Image } from 'lucide-react'
+import { parseQuestionsFromText } from '../lib/pdfParse'
+import { X, Loader2, AlertTriangle, Check, Trash2, Plus, Edit3, Image } from 'lucide-react'
 
 interface Props {
   lesson: Lesson; students: Student[]
   onClose: () => void; onSaved: () => void
 }
-type Step = 'extracting' | 'generating' | 'review' | 'saving' | 'done' | 'error'
+type Step = 'extracting' | 'review' | 'saving' | 'done' | 'error'
 const uid = () => Math.random().toString(36).slice(2, 10)
 
 export default function CreatePracticeModal({ lesson, students, onClose, onSaved }: Props) {
@@ -23,89 +24,57 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
   const [assignedTo, setAssignedTo]   = useState<string[]>([])
   const [uploadingImg, setUploadingImg] = useState<string | null>(null)
 
-
   useState(() => { startProcess() })
 
   async function startProcess() {
     setStep('extracting'); setError('')
     try {
+      // Step 1: Extract text from PDF
+      setProgress('Extrayendo texto del PDF...')
       let pdfText = ''
       if (lesson.fileUrl) {
-        setProgress('Extrayendo texto del PDF...')
-        try {
-          pdfText = await extractTextFromUrl(lesson.fileUrl)
-          console.log('Texto extraído:', pdfText.length, 'caracteres')
-        } catch (e) {
-          console.warn('Error extrayendo texto:', e)
-        }
+        pdfText = await extractTextFromUrl(lesson.fileUrl)
+      }
+      if (!pdfText || pdfText.trim().length < 100) {
+        throw new Error('No se pudo extraer texto del PDF.')
       }
 
-      if (!pdfText || pdfText.trim().length < 50) {
-        throw new Error('No se pudo extraer texto del PDF. Asegurate de que el PDF tenga texto seleccionable (no sea una imagen escaneada).')
+      // Step 2: Parse questions with regex (ZERO AI cost, instant)
+      setProgress('Parseando preguntas...')
+      const parsed = parseQuestionsFromText(pdfText)
+      if (parsed.length === 0) {
+        throw new Error('No se encontraron preguntas en el PDF.')
       }
 
-      setStep('generating')
-      setProgress('Claude está analizando el examen...')
-
-      const response = await fetch('/.netlify/functions/generate-practice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subject:  lesson.subject,
-          title:    lesson.title,
-          fileName: lesson.fileName,
-          pdfText:  pdfText.slice(0, 6000),
-        }),
-      })
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: `Error ${response.status}` }))
-        throw new Error(err.error ?? `Error del servidor: ${response.status}`)
-      }
-
-      const data = await response.json()
-      if (data.error) throw new Error(data.error)
-
-      const raw = data.content?.[0]?.text ?? ''
-      if (!raw) throw new Error('La IA no devolvió contenido.')
-
-      const jsonMatch = raw.match(/\[[\s\S]*\]/)
-      if (!jsonMatch) throw new Error(`Formato inesperado: ${raw.slice(0, 200)}`)
-
-      const parsed = JSON.parse(jsonMatch[0])
-      // Build exam key from lesson title/filename to find matching images
-      // e.g. "Examenes de Mep 7/2023.pdf" → "examenes_de_mep_7_2023"
-      // Use stored examKey from lesson (set at upload time)
-      // Falls back to building from fileName if not set
+      // Step 3: Load matching images from question_images table
+      setProgress('Buscando imágenes...')
       const examKey = lesson.examKey ?? qImages.buildExamKey(
         (lesson.fileName ?? lesson.title).replace(/\.pdf$/i, '')
       )
-      console.log('Looking for images with examKey:', examKey)
       let imgs: Awaited<ReturnType<typeof qImages.forExam>> = []
       try {
         imgs = await qImages.forExam(examKey)
-        console.log('Found', imgs.length, 'image mappings for', examKey)
-
-      } catch (e) {
-        console.warn('No images found for this exam:', e)
+        console.log(`Found ${imgs.length} images for examKey: ${examKey}`)
+      } catch (_e) {
+        console.warn('No images found')
       }
 
-      const parsedQs: Question[] = parsed.map((q: any, idx: number) => {
-        // Try to get question number from text "1)" "1." etc, fallback to index
-        const textMatch = String(q.text ?? '').match(/^\s*(\d+)[.)\s]/)
-        const questionNum = textMatch ? parseInt(textMatch[1]) : idx + 1
-        const img = qImages.findForQuestion(imgs, questionNum)
+      // Step 4: Build Question objects with auto-attached images
+      const isMath = lesson.subject === 'Matemáticas'
+      const qs: Question[] = parsed.map(p => {
+        const img = qImages.findForQuestion(imgs, p.num)
         return {
           id:            uid(),
-          text:          String(q.text ?? ''),
-          type:          q.type === 'open' ? 'open' : 'multiple',
-          options:       q.options ?? (q.type !== 'open' ? ['', '', '', ''] : undefined),
-          correctOption: typeof q.correctOption === 'number' ? q.correctOption : 0,
-          points:        Number(q.points) || 5,
+          text:          p.text,
+          type:          (isMath && p.options.length === 0) ? 'open' : 'multiple',
+          options:       p.options.length >= 3 ? p.options.slice(0, 4) : ['', '', '', ''],
+          correctOption: 0,
+          points:        isMath ? 10 : 5,
           imageUrl:      img?.imageUrl,
         }
       })
-      setQuestions(parsedQs)
+
+      setQuestions(qs)
       setStep('review')
     } catch (e: any) {
       setError(e.message ?? 'Error procesando el PDF')
@@ -127,24 +96,19 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
     }])
   }
 
-  // Upload image for a specific question
   const handleImageUpload = async (qId: string, file: File) => {
     setUploadingImg(qId)
     try {
       const { url } = await db.storage.uploadFile(file)
       updateQ(qId, { imageUrl: url })
-    } catch (e) {
-      alert('Error subiendo la imagen. Intentá de nuevo.')
-    } finally {
-      setUploadingImg(null)
-    }
+    } catch (_e) { alert('Error subiendo imagen') }
+    finally { setUploadingImg(null) }
   }
 
   const save = async () => {
     if (!title.trim())           { alert('El título es requerido'); return }
     if (questions.length === 0)  { alert('Necesitás al menos una pregunta'); return }
-    if (assignedTo.length === 0) { alert('Asigná la práctica a al menos un alumno'); return }
-    if (questions.some(q => !q.text.trim())) { alert('Completá el enunciado de todas las preguntas'); return }
+    if (assignedTo.length === 0) { alert('Asigná a al menos un alumno'); return }
     setStep('saving')
     try {
       await db.practices.add({
@@ -160,26 +124,23 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
   }
 
   const totalPoints = questions.reduce((a, q) => a + (Number(q.points) || 0), 0)
-  const hasGraphics  = questions.some(q => q.text.includes('[Ver figura'))
+  const withImages  = questions.filter(q => q.imageUrl).length
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-card modal-large">
         <div className="modal-header">
           <div>
-            <h3>Crear práctica con IA</h3>
+            <h3>Crear práctica</h3>
             <p className="modal-subtitle" style={{padding:0,marginTop:4}}>{lesson.title}</p>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={18}/></button>
         </div>
 
-        {(step === 'extracting' || step === 'generating') && (
+        {step === 'extracting' && (
           <div className="modal-loading">
-            <div className="ai-spinner"><Sparkles size={32} className="sparkle-spin"/></div>
+            <Loader2 size={32} className="spin"/>
             <p className="ai-progress-text">{progress}</p>
-            <div className="ai-progress-bar">
-              <div className={`ai-progress-fill ${step === 'generating' ? 'fill-70' : 'fill-30'}`}/>
-            </div>
           </div>
         )}
 
@@ -241,18 +202,13 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                 </div>
               </div>
 
-              {/* Graphics notice */}
-              {hasGraphics && (
-                <div className="math-graphics-notice">
-                  <Image size={15}/>
-                  <span>Algunas preguntas tienen <strong>[Ver figura]</strong> — podés subir la imagen correspondiente con el botón 🖼️ en cada pregunta.</span>
-                </div>
-              )}
-
-              {/* AI banner */}
+              {/* Summary banner */}
               <div className="ai-generated-banner">
-                <Sparkles size={14}/>
-                <span>IA extrajo <strong>{questions.length} preguntas</strong> · {totalPoints} pts totales. Revisá y editá antes de guardar.</span>
+                <Check size={14} style={{color:'var(--success)'}}/>
+                <span>
+                  <strong>{questions.length} preguntas</strong> extraídas · {totalPoints} pts
+                  {withImages > 0 && <> · <strong>{withImages}</strong> con imagen adjunta 🖼️</>}
+                </span>
                 <button className="btn-outline sm" onClick={addQ}><Plus size={12}/> Agregar</button>
               </div>
 
@@ -267,24 +223,20 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                           <input type="number" min={1} max={100} value={q.points} style={{width:56}}
                             onChange={e => updateQ(q.id,{points:+e.target.value})}/>
                         </div>
-                        {/* Image upload button */}
-                        <label className={`icon-btn ${q.imageUrl?'active-img-btn':''}`} title="Adjuntar imagen" style={{cursor:'pointer'}}>
-                          {uploadingImg === q.id
-                            ? <Loader2 size={14} className="spin"/>
-                            : <Image size={14}/>
-                          }
+                        <label className={`icon-btn ${q.imageUrl?'active-img-btn':''}`}
+                          title="Adjuntar imagen" style={{cursor:'pointer'}}>
+                          {uploadingImg===q.id ? <Loader2 size={14} className="spin"/> : <Image size={14}/>}
                           <input type="file" accept="image/*" style={{display:'none'}}
-                            onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(q.id, f) }}/>
+                            onChange={e => { const f=e.target.files?.[0]; if(f) handleImageUpload(q.id,f) }}/>
                         </label>
                         <button className="icon-btn" onClick={() => setEditingQ(editingQ===q.id?null:q.id)}><Edit3 size={14}/></button>
                         <button className="icon-btn danger sm" onClick={() => removeQ(q.id)}><Trash2 size={14}/></button>
                       </div>
                     </div>
 
-                    {/* Image preview */}
                     {q.imageUrl && (
                       <div className="q-image-preview">
-                        <img src={q.imageUrl} alt="Figura adjunta"/>
+                        <img src={q.imageUrl} alt="Figura"/>
                         <button className="remove-img-btn" onClick={() => updateQ(q.id,{imageUrl:undefined})}>
                           <X size={12}/> Quitar
                         </button>
@@ -302,7 +254,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                                 <input type="radio" name={`correct-${q.id}`} checked={q.correctOption===oi}
                                   onChange={() => updateQ(q.id,{correctOption:oi})}/>
                                 <span className="opt-letter">{String.fromCharCode(65+oi)}</span>
-                                <input type="text" value={opt} placeholder={`Opción ${String.fromCharCode(65+oi)}`}
+                                <input type="text" value={opt}
                                   onChange={e => { const opts=[...(q.options??[])]; opts[oi]=e.target.value; updateQ(q.id,{options:opts}) }}/>
                               </div>
                             ))}
