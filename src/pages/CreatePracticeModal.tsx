@@ -33,7 +33,9 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
       setProgress('Extrayendo texto del PDF...')
       let pdfText = ''
       if (lesson.fileUrl) {
-        pdfText = await extractTextFromUrl(lesson.fileUrl)
+       pdfText = await extractTextFromUrl(lesson.fileUrl)
+console.log('Texto extraído:', pdfText.length, 'chars')
+console.log('Primeras líneas:', pdfText.slice(0, 500))
       }
       if (!pdfText || pdfText.trim().length < 100) {
         throw new Error('No se pudo extraer texto del PDF.')
