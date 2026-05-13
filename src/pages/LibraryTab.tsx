@@ -15,11 +15,12 @@ const GRADES: Grade[]     = ['7° Grado', '8° Grado', '9° Grado', '10° Grado'
 
 // ── Detecta grado desde path/nombre de carpeta ───────────────────
 function detectGrade(path: string): Grade {
-  if (/mep\s*7|grado\s*7|7[°o]/i.test(path)) return '7° Grado'
-  if (/mep\s*8|grado\s*8|8[°o]/i.test(path)) return '8° Grado'
-  if (/mep\s*9|grado\s*9|9[°o]/i.test(path)) return '9° Grado'
-  if (/mep\s*10|grado\s*10|10[°o]/i.test(path)) return '10° Grado'
-  if (/bachillerato|bachi|11[°o]/i.test(path)) return '11° Grado'
+  if (/bachillerato|bachi/i.test(path)) return '11° Grado'  // check bachi FIRST (before 7/8/9)
+  if (/mep\s*7|grado\s*7|sétimo|setimo|\b7[°o]/i.test(path)) return '7° Grado'
+  if (/mep\s*8|grado\s*8|octavo|\b8[°o]/i.test(path)) return '8° Grado'
+  if (/mep\s*9|grado\s*9|noveno|\b9[°o]/i.test(path)) return '9° Grado'
+  if (/mep\s*10|grado\s*10|\b10[°o]/i.test(path)) return '10° Grado'
+  if (/\b11[°o]/i.test(path)) return '11° Grado'
   if (/univers/i.test(path)) return 'Universitario'
   return '7° Grado'
 }
