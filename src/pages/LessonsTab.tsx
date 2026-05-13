@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { Lesson, Student, Subject } from '../lib/data'
 import { db } from '../lib/data'
-import { Plus, Trash2, AlertTriangle, Loader2, FileText, Users, Eye, EyeOff, Upload } from 'lucide-react'
+import { Plus, Trash2, AlertTriangle, Loader2, FileText, Users, Eye, EyeOff, Upload, Sparkles } from 'lucide-react'
+import CreatePracticeModal from './CreatePracticeModal'
 
 const SUBJECTS: Subject[] = ['Matemáticas', 'Español', 'Ciencias', 'Estudios Sociales', 'Inglés']
 
@@ -12,12 +13,104 @@ function ytEmbed(url: string): string | null {
   return m ? m[1] : null
 }
 
+// ── Componente para agrupar por materia ─────────────────────────
+function SubjectSection({ subject, lessons, students, onToggleActive, onRemove, onCreatePractice }: {
+  subject: Subject
+  lessons: Lesson[]
+  students: Student[]
+  onToggleActive: (lesson: Lesson) => void
+  onRemove: (id: string) => void
+  onCreatePractice: (lesson: Lesson) => void
+}) {
+  const [expanded, setExpanded] = useState<string | null>(null)
+  
+  if (lessons.length === 0) return null
+  
+  return (
+    <div className="subject-section">
+      <div className="subject-header">
+        <span className={`subject-badge-large sb-${subject.split(' ')[0].toLowerCase()}`}>
+          {subject}
+        </span>
+        <span className="subject-count">{lessons.length} lecciones</span>
+      </div>
+      <div className="library-grid">
+        {lessons.map(l => (
+          <div className={`lib-card ${l.isActive ? 'lib-active' : 'lib-inactive'}`} key={l.id}>
+            <div className="lib-card-top">
+              <span className={`subject-badge sb-${l.subject.split(' ')[0].toLowerCase()}`}>{l.subject}</span>
+              <span className={`status-pill ${l.isActive ? 'pill-active' : 'pill-inactive'}`}>
+                {l.isActive ? '● Activo' : '○ Inactivo'}
+              </span>
+            </div>
+            <div className="lib-card-icon"><FileText size={28}/></div>
+            <h4 className="lib-card-title">{l.title}</h4>
+            {l.fileName && <p className="lib-card-file">{l.fileName}</p>}
+            <div className="lib-card-assigned">
+              <Users size={12}/>
+              <span>{l.assignedTo.length === 0 ? 'Sin asignar' : `${l.assignedTo.length} alumno${l.assignedTo.length !== 1 ? 's' : ''}`}</span>
+            </div>
+            <div className="lib-card-actions">
+              <button className="btn-outline sm" onClick={() => onToggleActive(l)}>
+                {l.isActive ? <><EyeOff size={13}/> Desactivar</> : <><Eye size={13}/> Activar</>}
+              </button>
+              <button className="btn-primary sm" onClick={() => onCreatePractice(l)}>
+                <Sparkles size={13}/> Crear práctica
+              </button>
+              <button className="btn-outline sm danger" onClick={() => onRemove(l.id)}>
+                <Trash2 size={13}/> Eliminar
+              </button>
+            </div>
+            
+            {/* Expanded content */}
+            {expanded === l.id && (
+              <div className="lesson-expanded" style={{marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0'}}>
+                {l.content && <p className="lesson-content" style={{fontSize: '0.875rem', marginBottom: '0.75rem'}}>{l.content}</p>}
+                {l.fileUrl && (
+                  <a href={l.fileUrl} target="_blank" rel="noreferrer" className="btn-outline sm">
+                    <FileText size={13}/> Ver documento
+                  </a>
+                )}
+                {l.youtubeUrl && ytEmbed(l.youtubeUrl) && (
+                  <div className="yt-preview" style={{marginTop: 12}}>
+                    <iframe width="100%" height="180"
+                      src={`https://www.youtube.com/embed/${ytEmbed(l.youtubeUrl)}`}
+                      allowFullScreen style={{borderRadius: 8, border: 'none'}}/>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* View details button */}
+            <button 
+              className="view-details-btn" 
+              onClick={() => setExpanded(expanded === l.id ? null : l.id)}
+              style={{
+                marginTop: '0.75rem',
+                width: '100%',
+                fontSize: '0.75rem',
+                background: 'transparent',
+                border: 'none',
+                color: '#64748b',
+                cursor: 'pointer',
+                padding: '0.5rem'
+              }}
+            >
+              {expanded === l.id ? '▲ Ver menos' : '▼ Ver detalles'}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function LessonsTab({ lessons, students, reload }: Props) {
   const [showForm, setShowForm]   = useState(false)
   const [saving, setSaving]       = useState(false)
   const [err, setErr]             = useState('')
-  const [expanded, setExpanded]   = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [createTarget, setCreateTarget] = useState<Lesson | null>(null)
 
   const [form, setForm] = useState({
     title: '', subject: SUBJECTS[0] as Subject,
@@ -60,11 +153,19 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
     await db.lessons.update({ ...l, isActive: !l.isActive }); reload()
   }
 
+  // Agrupar por materia
+  const lessonsBySubject = SUBJECTS.map(subject => ({
+    subject,
+    lessons: lessons.filter(l => l.subject === subject)
+  })).filter(group => group.lessons.length > 0)
+
   return (
     <div>
       <div className="section-topbar">
         <h2>Lecciones ({lessons.length})</h2>
-        <button className="btn-primary" onClick={() => setShowForm(v => !v)}><Plus size={15}/> Nueva lección</button>
+        <button className="btn-primary" onClick={() => setShowForm(v => !v)}>
+          <Plus size={15}/> Nueva lección
+        </button>
       </div>
 
       {showForm && (
@@ -151,53 +252,34 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
         </div>
       )}
 
-      <div className="lessons-grid">
-        {lessons.length === 0 && <p className="empty-hint">No hay lecciones aún.</p>}
-        {lessons.map(l => (
-          <div className="lesson-card" key={l.id}>
-            <div className="lesson-card-header">
-              <div>
-                <span className={`subject-badge sb-${l.subject.split(' ')[0].toLowerCase()}`}>{l.subject}</span>
-                <span className={`status-dot ${l.isActive ? 'active' : ''}`}>{l.isActive ? '● Activo' : '○ Inactivo'}</span>
-              </div>
-              <div className="card-actions">
-                <button className="icon-btn" onClick={() => setExpanded(expanded === l.id ? null : l.id)}>
-                  {expanded === l.id ? <EyeOff size={15}/> : <Eye size={15}/>}
-                </button>
-                <button className="icon-btn danger" onClick={() => remove(l.id)}><Trash2 size={15}/></button>
-              </div>
-            </div>
-
-            <h4 className="lesson-title">{l.title}</h4>
-            {l.fileName && <p className="lesson-meta"><FileText size={12}/> {l.fileName}</p>}
-            {l.assignedTo.length > 0 && <p className="lesson-meta"><Users size={12}/> {l.assignedTo.length} alumno{l.assignedTo.length !== 1 ? 's' : ''}</p>}
-
-            {expanded === l.id && (
-              <div className="lesson-expanded">
-                {l.content && <p className="lesson-content">{l.content}</p>}
-                {l.fileUrl && (
-                  <a href={l.fileUrl} target="_blank" rel="noreferrer" className="btn-outline sm">
-                    <FileText size={13}/> Ver documento
-                  </a>
-                )}
-                {l.youtubeUrl && ytEmbed(l.youtubeUrl) && (
-                  <div className="yt-preview" style={{marginTop:12}}>
-                    <iframe width="100%" height="180"
-                      src={`https://www.youtube.com/embed/${ytEmbed(l.youtubeUrl)}`}
-                      allowFullScreen style={{borderRadius:8, border:'none'}}/>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="lesson-footer">
-              <button className="btn-outline sm" onClick={() => toggleActive(l)}>
-                {l.isActive ? <><EyeOff size={12}/> Desactivar</> : <><Eye size={12}/> Activar</>}
-              </button>
-            </div>
+      {/* Lessons grid grouped by subject */}
+      {lessons.length === 0 
+        ? <p className="empty-hint">No hay lecciones aún. Creá una nueva lección para empezar.</p>
+        : (
+          <div className="subjects-container">
+            {lessonsBySubject.map(({ subject, lessons: subjectLessons }) => (
+              <SubjectSection
+                key={subject}
+                subject={subject}
+                lessons={subjectLessons}
+                students={students}
+                onToggleActive={toggleActive}
+                onRemove={remove}
+                onCreatePractice={setCreateTarget}
+              />
+            ))}
           </div>
-        ))}
-      </div>
+        )
+      }
+
+      {createTarget && (
+        <CreatePracticeModal
+          lesson={createTarget}
+          students={students}
+          onClose={() => setCreateTarget(null)}
+          onSaved={() => { setCreateTarget(null); reload() }}
+        />
+      )}
     </div>
   )
 }

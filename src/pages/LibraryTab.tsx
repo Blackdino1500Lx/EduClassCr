@@ -5,7 +5,7 @@ import { db, qImages } from '../lib/data'
 import CreatePracticeModal from './CreatePracticeModal'
 import {
   Upload, FileText, Search, Eye, EyeOff, Users, X, AlertTriangle,
-  Loader2, CheckCircle, FolderOpen, Filter, Sparkles
+  Loader2, CheckCircle, FolderOpen, Filter, Sparkles, Image as ImageIcon
 } from 'lucide-react'
 
 interface Props { lessons: Lesson[]; students: Student[]; reload: () => void }
@@ -52,6 +52,7 @@ interface UploadJob {
   subject: Subject
   status: 'pending' | 'uploading' | 'done' | 'error' | 'skipped'
   error?: string
+  imagesZip?: File | null
 }
 
 // ── Assign modal ─────────────────────────────────────────────────
@@ -110,6 +111,64 @@ function AssignModal({ lesson, students, onClose, onSave }: {
   )
 }
 
+// ── Componente para agrupar por materia ─────────────────────────
+function SubjectSection({ subject, lessons, students, onAssign, onToggleActive, onCreatePractice }: {
+  subject: Subject
+  lessons: Lesson[]
+  students: Student[]
+  onAssign: (lesson: Lesson) => void
+  onToggleActive: (lesson: Lesson) => void
+  onCreatePractice: (lesson: Lesson) => void
+}) {
+  if (lessons.length === 0) return null
+  
+  return (
+    <div className="subject-section">
+      <div className="subject-header">
+        <span className={`subject-badge-large sb-${subject.split(' ')[0].toLowerCase()}`}>
+          {subject}
+        </span>
+        <span className="subject-count">{lessons.length} materiales</span>
+      </div>
+      <div className="library-grid">
+        {lessons.map(l => (
+          <div className={`lib-card ${l.isActive ? 'lib-active' : 'lib-inactive'}`} key={l.id}>
+            <div className="lib-card-top">
+              <span className={`subject-badge sb-${l.subject.split(' ')[0].toLowerCase()}`}>{l.subject}</span>
+              <span className={`status-pill ${l.isActive ? 'pill-active' : 'pill-inactive'}`}>
+                {l.isActive ? '● Activo' : '○ Inactivo'}
+              </span>
+            </div>
+            <div className="lib-card-icon"><FileText size={28}/></div>
+            <h4 className="lib-card-title">{l.title}</h4>
+            <p className="lib-card-file">{l.fileName}</p>
+            <div className="lib-card-assigned">
+              <Users size={12}/>
+              <span>{l.assignedTo.length === 0 ? 'Sin asignar' : `${l.assignedTo.length} alumno${l.assignedTo.length !== 1 ? 's' : ''}`}</span>
+            </div>
+            <div className="lib-card-actions">
+              <button className="btn-outline sm" onClick={() => onAssign(l)}>
+                <Users size={13}/> Asignar
+              </button>
+              <button className={`btn-outline sm ${l.isActive ? 'btn-danger-outline' : ''}`} onClick={() => onToggleActive(l)}>
+                {l.isActive ? <><EyeOff size={13}/> Desactivar</> : <><Eye size={13}/> Activar</>}
+              </button>
+              <button className="btn-primary sm" onClick={() => onCreatePractice(l)}>
+                <Sparkles size={13}/> Crear práctica
+              </button>
+              {l.fileUrl && (
+                <a href={l.fileUrl} target="_blank" rel="noreferrer" className="btn-outline sm">
+                  <FileText size={13}/> Ver PDF
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function LibraryTab({ lessons, students, reload }: Props) {
   const [jobs, setJobs]               = useState<UploadJob[]>([])
   const [uploading, setUploading]     = useState(false)
@@ -120,87 +179,93 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
   const [search, setSearch]           = useState('')
   const [assignTarget, setAssignTarget] = useState<Lesson | null>(null)
   const [createTarget, setCreateTarget] = useState<Lesson | null>(null)
-  const imgZipRef = useRef<HTMLInputElement>(null)
-  const [imgJobs, setImgJobs] = useState<{name:string; status:'pending'|'uploading'|'done'|'error'|'skipped'; examKey?:string}[]>([])
-  const [imgUploading, setImgUploading] = useState(false)
-  const [imgSummary, setImgSummary] = useState<{total:number; exams:string[]} | null>(null)
   const [pendingFile, setPendingFile]       = useState<File | null>(null)
+  const [pendingImagesZip, setPendingImagesZip] = useState<File | null>(null)
   const [pendingTitle, setPendingTitle]     = useState('')
   const [pendingGrade, setPendingGrade]     = useState<Grade>('7° Grado')
   const [pendingSubject, setPendingSubject] = useState<Subject>('Matemáticas')
   const [pendingDesc, setPendingDesc]       = useState('')
   const zipRef = useRef<HTMLInputElement>(null)
   const pdfRef = useRef<HTMLInputElement>(null)
+  const imagesZipRef = useRef<HTMLInputElement>(null)
 
-  // ── Process Image ZIP ─────────────────────────────────────────
-  const handleImgZip = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ── Process single PDF with optional images ──────────────────────
+  const handlePdf = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const zip  = await JSZip.loadAsync(file)
-    const jobs: {name:string; status:'pending'|'uploading'|'done'|'error'|'skipped'; examKey?:string}[] = []
+    const grade   = detectGrade(file.name)
+    const subject = detectSubject(file.name)
+    const baseName = file.name.replace(/\.pdf$/i, '').replace(/_/g, ' ')
+    setPendingFile(file)
+    setPendingGrade(grade)
+    setPendingSubject(subject)
+    setPendingTitle(`${grade} · ${baseName}`)
+    setPendingDesc('')
+    e.target.value = ''
+  }
 
-    zip.forEach((relativePath, entry) => {
-      if (entry.dir) return
-      const ext = relativePath.toLowerCase()
-      if (!ext.endsWith('.png') && !ext.endsWith('.jpg') && !ext.endsWith('.jpeg')) return
-      if (relativePath.includes('__MACOSX')) return
-      jobs.push({ name: relativePath, status: 'pending' })
-    })
+  const handleImagesZip = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPendingImagesZip(file)
+    e.target.value = ''
+  }
 
-    setImgJobs(jobs); setImgUploading(true)
-    const updated = [...jobs]
+  const confirmSinglePdf = async () => {
+    if (!pendingFile || !pendingTitle.trim()) return
+    
+    const job: UploadJob = {
+      name: pendingFile.name, 
+      path: pendingFile.name,
+      grade: pendingGrade, 
+      subject: pendingSubject,
+      status: 'pending',
+      customTitle: pendingTitle.trim(),
+      customDesc:  pendingDesc.trim(),
+      imagesZip: pendingImagesZip
+    }
+    
+    setJobs([job]); 
+    setUploadDone(false); 
+    
+    // Procesar imágenes si hay ZIP
+    if (pendingImagesZip) {
+      await processImagesZip(pendingImagesZip, pendingTitle.trim())
+    }
+    
+    await runUploadFiles([{ job, file: pendingFile }])
+    setPendingFile(null)
+    setPendingImagesZip(null)
+  }
 
-    for (let i = 0; i < updated.length; i++) {
-      const j = updated[i]
-      const parts     = j.name.split('/')
-      const folderName = parts.length > 1 ? parts[parts.length - 2] : ''
-      const fileName   = parts[parts.length - 1].replace(/\.[^.]+$/, '') // no extension
-      // folderName like "Examenes_de_Mep_7_2023" → "mep_7_2023"
-      const examKey    = qImages.buildExamKey(folderName)
-      const range      = qImages.parseRange(fileName)
-
-      updated[i] = { ...j, status: 'uploading', examKey }
-      setImgJobs([...updated])
-
-      try {
-        const blob    = await zip.file(j.name)!.async('blob')
-        const imgFile = new File([blob], parts[parts.length - 1], { type: 'image/png' })
-
-        // Retry up to 3 times on timeout
-        let url = ''
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            const res = await db.storage.uploadFile(imgFile)
-            url = res.url
-            break
-          } catch (e: any) {
-            if (attempt < 2) {
-              await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
-            } else throw e
-          }
-        }
-
+  const processImagesZip = async (zipFile: File, examTitle: string) => {
+    try {
+      const zip = await JSZip.loadAsync(zipFile)
+      const examKey = qImages.buildExamKey(examTitle.replace(/[^a-zA-Z0-9]/g, '_'))
+      
+      for (const [relativePath, entry] of Object.entries(zip.files)) {
+        if (entry.dir) continue
+        const ext = relativePath.toLowerCase()
+        if (!ext.endsWith('.png') && !ext.endsWith('.jpg') && !ext.endsWith('.jpeg')) continue
+        
+        const blob = await entry.async('blob')
+        const fileName = relativePath.split('/').pop() || relativePath
+        const imgFile = new File([blob], fileName, { type: 'image/png' })
+        
+        const { url } = await db.storage.uploadFile(imgFile)
+        const questionNum = parseInt(fileName.match(/\d+/)?.[0] || '0')
+        
         await qImages.add({
           examKey,
-          fromQ:     range?.from ?? 0,
-          toQ:       range?.to ?? 0,
-          imageUrl:  url,
+          fromQ: questionNum,
+          toQ: questionNum,
+          imageUrl: url,
           imageName: fileName,
         })
-        updated[i] = { ...j, status: 'done', examKey }
-      } catch (err) {
-        updated[i] = { ...j, status: 'error', examKey }
       }
-      setImgJobs([...updated])
-      await new Promise(r => setTimeout(r, 800))
+    } catch (err) {
+      console.error('Error processing images zip:', err)
     }
-
-    setImgUploading(false)
-    e.target.value = ''
-    // Build summary
-    const done = updated.filter(j => j.status === 'done')
-    const exams = [...new Set(done.map(j => j.examKey ?? '').filter(Boolean))]
-    setImgSummary({ total: done.length, exams })
   }
 
   // ── Process ZIP ────────────────────────────────────────────────
@@ -225,37 +290,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
 
     setJobs(newJobs); setUploadDone(false)
     e.target.value = ''
-
-    // Auto-start upload
     await runUpload(newJobs, zip)
-  }
-
-  // ── Process single PDF — show grade/subject picker first ──────
-  const handlePdf = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const grade   = detectGrade(file.name)
-    const subject = detectSubject(file.name)
-    const baseName = file.name.replace(/\.pdf$/i, '').replace(/_/g, ' ')
-    setPendingFile(file)
-    setPendingGrade(grade)
-    setPendingSubject(subject)
-    setPendingTitle(`${grade} · ${baseName}`)
-    setPendingDesc('')
-    e.target.value = ''
-  }
-
-  const confirmSinglePdf = async () => {
-    if (!pendingFile || !pendingTitle.trim()) return
-    const job: UploadJob = {
-      name: pendingFile.name, path: pendingFile.name,
-      grade: pendingGrade, subject: pendingSubject,
-      status: 'pending',
-      customTitle: pendingTitle.trim(),
-      customDesc:  pendingDesc.trim(),
-    }
-    setJobs([job]); setUploadDone(false); setPendingFile(null)
-    await runUploadFiles([{ job, file: pendingFile }])
   }
 
   // ── Upload from ZIP ────────────────────────────────────────────
@@ -265,7 +300,6 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
 
     for (let i = 0; i < updated.length; i++) {
       const j = updated[i]
-      // Check duplicate
       const exists = lessons.some(l => l.fileName === j.name)
       if (exists) { updated[i] = { ...j, status: 'skipped' }; setJobs([...updated]); continue }
 
@@ -275,7 +309,6 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
         const file    = new File([blob], j.name, { type: 'application/pdf' })
         const { url } = await db.storage.uploadFile(file)
 
-        // Build examKey: normalize(folderName_fileNameWithoutExt)
         const jFolder  = j.path.split('/').slice(-2, -1)[0] ?? ''
         const jBase    = j.name.replace(/\.pdf$/i, '')
         const jExamKey = qImages.buildExamKey(`${jFolder}_${jBase}`)
@@ -358,6 +391,12 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
     return true
   })
 
+  // Agrupar por materia
+  const lessonsBySubject = SUBJECTS.map(subject => ({
+    subject,
+    lessons: filtered.filter(l => l.subject === subject)
+  })).filter(group => group.lessons.length > 0)
+
   const doneCount    = jobs.filter(j => j.status === 'done').length
   const skippedCount = jobs.filter(j => j.status === 'skipped').length
   const errorCount   = jobs.filter(j => j.status === 'error').length
@@ -385,70 +424,17 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
         <div className="lup-option">
           <div className="lup-icon"><FileText size={24}/></div>
           <div className="lup-text">
-            <strong>Subir PDF individual</strong>
-            <span>Un documento a la vez</span>
+            <strong>Subir PDF individual + Imágenes</strong>
+            <span>Selecciona un PDF y opcionalmente un ZIP de imágenes</span>
           </div>
           <button className="btn-outline" onClick={() => pdfRef.current?.click()} disabled={uploading}>
             <Upload size={14}/> Elegir PDF
           </button>
           <input ref={pdfRef} type="file" accept=".pdf" style={{display:'none'}} onChange={handlePdf}/>
         </div>
-        <div className="lup-divider">+</div>
-        <div className="lup-option">
-          <div className="lup-icon">🖼️</div>
-          <div className="lup-text">
-            <strong>ZIP de imágenes (opcional)</strong>
-            <span>Figuras y gráficas — se asocian automáticamente por número de pregunta</span>
-          </div>
-          <button className="btn-outline" onClick={() => imgZipRef.current?.click()} disabled={imgUploading}>
-            {imgUploading ? <><Loader2 size={14} className="spin"/> Subiendo...</> : <><Upload size={14}/> Elegir imágenes</>}
-          </button>
-          <input ref={imgZipRef} type="file" accept=".zip" style={{display:'none'}} onChange={handleImgZip}/>
-        </div>
       </div>
 
-      {/* Image upload progress */}
-      {imgJobs.length > 0 && (
-        <div className="upload-progress-card" style={{marginTop:12}}>
-          <div className="upc-header">
-            <span className="upc-title">{imgUploading ? '⏳ Subiendo imágenes...' : '✅ Imágenes cargadas'}</span>
-            <span className="upc-summary">
-              <span className="badge-success">{imgJobs.filter(j=>j.status==='done').length} subidas</span>
-              {imgJobs.filter(j=>j.status==='error').length > 0 && <span className="badge-error">{imgJobs.filter(j=>j.status==='error').length} errores</span>}
-            </span>
-          </div>
-          <div className="upc-list">
-            {imgJobs.map((j,i) => (
-              <div key={i} className={`upc-item upc-${j.status}`}>
-                <span className="upc-status-icon">
-                  {j.status==='done' && <CheckCircle size={13}/>}
-                  {j.status==='uploading' && <Loader2 size={13} className="spin"/>}
-                  {j.status==='error' && <AlertTriangle size={13}/>}
-                  {j.status==='pending' && '⬜'}
-                </span>
-                <span className="upc-name">{j.name.split('/').pop()}</span>
-                {j.examKey && <span className="upc-meta">→ {j.examKey}</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Persistent summary after upload */}
-      {imgSummary && !imgUploading && (
-        <div className="img-summary-banner">
-          <CheckCircle size={16} style={{color:'var(--success)', flexShrink:0}}/>
-          <div>
-            <strong>{imgSummary.total} imágenes</strong> asociadas a {imgSummary.exams.length} examen{imgSummary.exams.length !== 1 ? 'es' : ''}.
-            Al crear una práctica, se adjuntan automáticamente según el número de pregunta.
-            <div className="img-exam-list">
-              {imgSummary.exams.map(e => <span key={e} className="exam-chip">{e.replace(/_/g,' ')}</span>)}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Single PDF — full form modal */}
+      {/* Single PDF — full form modal with images option */}
       {pendingFile && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setPendingFile(null)}>
           <div className="modal-card" style={{maxWidth:500}}>
@@ -492,10 +478,36 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
                     placeholder="Ej: Convocatoria 01 — Geometría y Trigonometría"
                   />
                 </div>
+                <div className="field full">
+                  <label>📷 ZIP de imágenes (opcional)</label>
+                  <div className="image-zip-upload">
+                    <button 
+                      type="button"
+                      className="btn-outline"
+                      onClick={() => imagesZipRef.current?.click()}
+                    >
+                      <ImageIcon size={14}/> {pendingImagesZip ? 'Cambiar ZIP' : 'Seleccionar ZIP'}
+                    </button>
+                    {pendingImagesZip && (
+                      <span className="selected-file">{pendingImagesZip.name}</span>
+                    )}
+                    <input 
+                      ref={imagesZipRef} 
+                      type="file" 
+                      accept=".zip" 
+                      style={{display:'none'}} 
+                      onChange={handleImagesZip}
+                    />
+                  </div>
+                  <small className="hint-text">Las imágenes se asociarán automáticamente por número de pregunta</small>
+                </div>
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn-outline" onClick={() => setPendingFile(null)}>Cancelar</button>
+              <button className="btn-outline" onClick={() => {
+                setPendingFile(null)
+                setPendingImagesZip(null)
+              }}>Cancelar</button>
               <button className="btn-primary" onClick={confirmSinglePdf} disabled={uploading}>
                 {uploading ? <><Loader2 size={14} className="spin"/> Subiendo...</> : <><Upload size={14}/> Subir material</>}
               </button>
@@ -566,7 +578,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
         </div>
       </div>
 
-      {/* Materials grid */}
+      {/* Materials grid grouped by subject */}
       {filtered.length === 0
         ? (
           <div className="empty-state">
@@ -575,39 +587,17 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
           </div>
         )
         : (
-          <div className="library-grid">
-            {filtered.map(l => (
-              <div className={`lib-card ${l.isActive ? 'lib-active' : 'lib-inactive'}`} key={l.id}>
-                <div className="lib-card-top">
-                  <span className={`subject-badge sb-${l.subject.split(' ')[0].toLowerCase()}`}>{l.subject}</span>
-                  <span className={`status-pill ${l.isActive ? 'pill-active' : 'pill-inactive'}`}>
-                    {l.isActive ? '● Activo' : '○ Inactivo'}
-                  </span>
-                </div>
-                <div className="lib-card-icon"><FileText size={28}/></div>
-                <h4 className="lib-card-title">{l.title}</h4>
-                <p className="lib-card-file">{l.fileName}</p>
-                <div className="lib-card-assigned">
-                  <Users size={12}/>
-                  <span>{l.assignedTo.length === 0 ? 'Sin asignar' : `${l.assignedTo.length} alumno${l.assignedTo.length !== 1 ? 's' : ''}`}</span>
-                </div>
-                <div className="lib-card-actions">
-                  <button className="btn-outline sm" onClick={() => setAssignTarget(l)}>
-                    <Users size={13}/> Asignar
-                  </button>
-                  <button className={`btn-outline sm ${l.isActive ? 'btn-danger-outline' : ''}`} onClick={() => toggleActive(l)}>
-                    {l.isActive ? <><EyeOff size={13}/> Desactivar</> : <><Eye size={13}/> Activar</>}
-                  </button>
-                  <button className="btn-primary sm" onClick={() => setCreateTarget(l)}>
-                    <Sparkles size={13}/> Crear práctica
-                  </button>
-                  {l.fileUrl && (
-                    <a href={l.fileUrl} target="_blank" rel="noreferrer" className="btn-outline sm">
-                      <FileText size={13}/> Ver PDF
-                    </a>
-                  )}
-                </div>
-              </div>
+          <div className="subjects-container">
+            {lessonsBySubject.map(({ subject, lessons: subjectLessons }) => (
+              <SubjectSection
+                key={subject}
+                subject={subject}
+                lessons={subjectLessons}
+                students={students}
+                onAssign={setAssignTarget}
+                onToggleActive={toggleActive}
+                onCreatePractice={setCreateTarget}
+              />
             ))}
           </div>
         )
