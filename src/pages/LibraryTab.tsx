@@ -15,13 +15,14 @@ const GRADES: Grade[]     = ['7° Grado', '8° Grado', '9° Grado', '10° Grado'
 
 // ── Detecta grado desde path/nombre de carpeta ───────────────────
 function detectGrade(path: string): Grade {
-  if (/bachillerato|bachi/i.test(path)) return '11° Grado'  // check bachi FIRST (before 7/8/9)
-  if (/mep\s*7|grado\s*7|sétimo|setimo|\b7[°o]/i.test(path)) return '7° Grado'
-  if (/mep\s*8|grado\s*8|octavo|\b8[°o]/i.test(path)) return '8° Grado'
-  if (/mep\s*9|grado\s*9|noveno|\b9[°o]/i.test(path)) return '9° Grado'
-  if (/mep\s*10|grado\s*10|\b10[°o]/i.test(path)) return '10° Grado'
-  if (/\b11[°o]/i.test(path)) return '11° Grado'
-  if (/univers/i.test(path)) return 'Universitario'
+  const p = path.toLowerCase()
+  if (/bachillerato|bachi/.test(p)) return '11° Grado'
+  if (/mep.?7|grado.?7|sétimo|setimo|[^\d]7[°o]/.test(p)) return '7° Grado'
+  if (/mep.?8|grado.?8|octavo|[^\d]8[°o]/.test(p)) return '8° Grado'
+  if (/mep.?9|grado.?9|noveno|[^\d]9[°o]/.test(p)) return '9° Grado'
+  if (/mep.?10|grado.?10|[^\d]10[°o]/.test(p)) return '10° Grado'
+  if (/[^\d]11[°o]/.test(p)) return '11° Grado'
+  if (/univers/.test(p)) return 'Universitario'
   return '7° Grado'
 }
 
@@ -44,6 +45,8 @@ function friendlyTitle(filePath: string): string {
 
 interface UploadJob {
   name: string
+  customTitle?: string
+  customDesc?:  string
   path: string
   grade: Grade
   subject: Subject
@@ -121,6 +124,11 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
   const [imgJobs, setImgJobs] = useState<{name:string; status:'pending'|'uploading'|'done'|'error'|'skipped'; examKey?:string}[]>([])
   const [imgUploading, setImgUploading] = useState(false)
   const [imgSummary, setImgSummary] = useState<{total:number; exams:string[]} | null>(null)
+  const [pendingFile, setPendingFile]       = useState<File | null>(null)
+  const [pendingTitle, setPendingTitle]     = useState('')
+  const [pendingGrade, setPendingGrade]     = useState<Grade>('7° Grado')
+  const [pendingSubject, setPendingSubject] = useState<Subject>('Matemáticas')
+  const [pendingDesc, setPendingDesc]       = useState('')
   const zipRef = useRef<HTMLInputElement>(null)
   const pdfRef = useRef<HTMLInputElement>(null)
 
@@ -222,18 +230,32 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
     await runUpload(newJobs, zip)
   }
 
-  // ── Process single PDF ─────────────────────────────────────────
-  const handlePdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ── Process single PDF — show grade/subject picker first ──────
+  const handlePdf = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const job: UploadJob = {
-      name: file.name, path: file.name,
-      grade: detectGrade(file.name), subject: detectSubject(file.name),
-      status: 'pending',
-    }
-    setJobs([job]); setUploadDone(false)
+    const grade   = detectGrade(file.name)
+    const subject = detectSubject(file.name)
+    const baseName = file.name.replace(/\.pdf$/i, '').replace(/_/g, ' ')
+    setPendingFile(file)
+    setPendingGrade(grade)
+    setPendingSubject(subject)
+    setPendingTitle(`${grade} · ${baseName}`)
+    setPendingDesc('')
     e.target.value = ''
-    await runUploadFiles([{ job, file }])
+  }
+
+  const confirmSinglePdf = async () => {
+    if (!pendingFile || !pendingTitle.trim()) return
+    const job: UploadJob = {
+      name: pendingFile.name, path: pendingFile.name,
+      grade: pendingGrade, subject: pendingSubject,
+      status: 'pending',
+      customTitle: pendingTitle.trim(),
+      customDesc:  pendingDesc.trim(),
+    }
+    setJobs([job]); setUploadDone(false); setPendingFile(null)
+    await runUploadFiles([{ job, file: pendingFile }])
   }
 
   // ── Upload from ZIP ────────────────────────────────────────────
@@ -291,12 +313,15 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
       updated[i] = { ...job, status: 'uploading' }; setJobs([...updated])
       try {
         const { url } = await db.storage.uploadFile(file)
+        const sExamKey = qImages.buildExamKey(job.name.replace(/\.pdf$/i, ''))
         await db.lessons.add({
-          title:      friendlyTitle(job.path),
+          title:      job.customTitle ?? `${job.grade} · ${job.name.replace('.pdf','').replace(/_/g,' ')}`,
           subject:    job.subject,
-          content:    `Material — ${job.grade}.`,
+          content:    job.customDesc  ?? `Material — ${job.grade}.`,
           fileUrl:    url,
           fileName:   job.name,
+          examKey:    sExamKey,
+          pageImages: [],
           assignedTo: [],
           isActive:   false,
         })
@@ -343,12 +368,12 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
         <h2>Biblioteca ({lessons.length} materiales)</h2>
       </div>
 
-      {/* Upload zone */}
+      {/* Upload zone — unified */}
       <div className="library-upload-zone">
         <div className="lup-option">
           <div className="lup-icon">📦</div>
           <div className="lup-text">
-            <strong>Subir ZIP</strong>
+            <strong>Subir ZIP de PDFs</strong>
             <span>Extraemos todos los PDFs automáticamente</span>
           </div>
           <button className="btn-primary" onClick={() => zipRef.current?.click()} disabled={uploading}>
@@ -368,18 +393,15 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
           </button>
           <input ref={pdfRef} type="file" accept=".pdf" style={{display:'none'}} onChange={handlePdf}/>
         </div>
-      </div>
-
-      {/* Image ZIP upload zone */}
-      <div className="library-upload-zone" style={{marginTop:12, background:'#f0f9ff', borderColor:'#bfdbfe'}}>
+        <div className="lup-divider">+</div>
         <div className="lup-option">
           <div className="lup-icon">🖼️</div>
           <div className="lup-text">
-            <strong>Subir ZIP de imágenes</strong>
-            <span>Imágenes de figuras y gráficas — se asocian automáticamente a cada examen por nombre de carpeta</span>
+            <strong>ZIP de imágenes (opcional)</strong>
+            <span>Figuras y gráficas — se asocian automáticamente por número de pregunta</span>
           </div>
           <button className="btn-outline" onClick={() => imgZipRef.current?.click()} disabled={imgUploading}>
-            {imgUploading ? <><Loader2 size={14} className="spin"/> Subiendo...</> : <><Upload size={14}/> Elegir ZIP de imágenes</>}
+            {imgUploading ? <><Loader2 size={14} className="spin"/> Subiendo...</> : <><Upload size={14}/> Elegir imágenes</>}
           </button>
           <input ref={imgZipRef} type="file" accept=".zip" style={{display:'none'}} onChange={handleImgZip}/>
         </div>
@@ -421,6 +443,62 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
             Al crear una práctica, se adjuntan automáticamente según el número de pregunta.
             <div className="img-exam-list">
               {imgSummary.exams.map(e => <span key={e} className="exam-chip">{e.replace(/_/g,' ')}</span>)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Single PDF — full form modal */}
+      {pendingFile && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setPendingFile(null)}>
+          <div className="modal-card" style={{maxWidth:500}}>
+            <div className="modal-header">
+              <div>
+                <h3>Agregar material</h3>
+                <p className="modal-subtitle" style={{padding:0,marginTop:4}}>
+                  📄 {pendingFile.name}
+                </p>
+              </div>
+              <button className="icon-btn" onClick={() => setPendingFile(null)}><X size={18}/></button>
+            </div>
+            <div className="modal-body">
+              <div className="form-grid">
+                <div className="field full">
+                  <label>Título del material</label>
+                  <input
+                    value={pendingTitle}
+                    onChange={e => setPendingTitle(e.target.value)}
+                    placeholder="Ej: Bachillerato · Práctica 2023.1"
+                  />
+                </div>
+                <div className="field">
+                  <label>Grado</label>
+                  <select value={pendingGrade} onChange={e => setPendingGrade(e.target.value as Grade)}>
+                    {GRADES.map(g => <option key={g}>{g}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Materia</label>
+                  <select value={pendingSubject} onChange={e => setPendingSubject(e.target.value as Subject)}>
+                    {SUBJECTS.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="field full">
+                  <label>Descripción (opcional)</label>
+                  <textarea
+                    rows={2}
+                    value={pendingDesc}
+                    onChange={e => setPendingDesc(e.target.value)}
+                    placeholder="Ej: Convocatoria 01 — Geometría y Trigonometría"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-outline" onClick={() => setPendingFile(null)}>Cancelar</button>
+              <button className="btn-primary" onClick={confirmSinglePdf} disabled={uploading}>
+                {uploading ? <><Loader2 size={14} className="spin"/> Subiendo...</> : <><Upload size={14}/> Subir material</>}
+              </button>
             </div>
           </div>
         </div>
