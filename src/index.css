@@ -1266,131 +1266,153 @@ a { color: inherit; text-decoration: none; }
     align-items: flex-start;
   }
 }
-
-/* ============================================
-   BOTONES RESPONSIVE
-   ============================================ */
-.btn-primary, .btn-outline {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  white-space: nowrap;
+/* CORREGIR DESBORDE GLOBAL */
+.portal-root,
+.portal-content,
+.subject-section,
+.library-grid,
+.lib-card {
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
-@media (max-width: 640px) {
-  .btn-primary, .btn-outline {
-    padding: 0.4rem 0.75rem;
-    font-size: 0.8125rem;
-  }
-  
-  .section-topbar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
-  }
+.lib-card-title,
+.lib-card-file,
+.lesson-title {
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
-/* ============================================
-   UPLOAD PROGRESS
-   ============================================ */
-.upload-progress-card {
-  margin: 1rem 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  overflow-x: auto;
-}
-
-.upc-list {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.upc-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid #f1f5f9;
-  flex-wrap: wrap;
-}
-
-@media (max-width: 640px) {
-  .upc-item {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .upc-name {
-    word-break: break-all;
-    width: 100%;
-  }
-}
-
-/* ============================================
-   EMPTY STATE
-   ============================================ */
-.empty-state {
-  text-align: center;
-  padding: 3rem 1.5rem;
-  color: #64748b;
-}
-
-@media (max-width: 640px) {
-  .empty-state {
-    padding: 2rem 1rem;
-  }
-}
-
-/* ============================================
-   ASSIGN GRID
-   ============================================ */
-.assign-grid {
+/* GRID RESPONSIVE */
+.library-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.5rem;
-  max-height: 300px;
-  overflow-y: auto;
-  padding: 0.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
 }
 
-@media (max-width: 480px) {
-  .assign-grid {
+@media (min-width: 1024px) {
+  .library-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.25rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .library-grid {
     grid-template-columns: 1fr;
   }
 }
 
-.assign-chip {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-  background: #f8fafc;
-  cursor: pointer;
-  font-size: 0.875rem;
-  word-break: break-word;
+/* TABS RESPONSIVOS (sin drawer) */
+@media (max-width: 768px) {
+  .teacher-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+  }
+  
+  .tab-btn {
+    flex: 1;
+    min-width: calc(33% - 0.5rem);
+    justify-content: center;
+    padding: 0.5rem 0.25rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+  
+  .portal-header {
+    padding: 0.75rem;
+  }
+  
+  .portal-content {
+    padding: 0.75rem;
+  }
 }
 
-/* ============================================
-   SCROLLBAR (opcional, mejora UX)
-   ============================================ */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* ZONA DE SUBIDA RESPONSIVE */
+@media (max-width: 768px) {
+  .library-upload-zone {
+    flex-direction: column;
+  }
+  
+  .lup-option {
+    width: 100%;
+  }
+  
+  .lup-divider {
+    display: none;
+  }
 }
 
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
+/* FORMULARIOS RESPONSIVE */
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .form-actions button {
+    width: 100%;
+  }
 }
 
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+/* MODAL RESPONSIVE */
+@media (max-width: 640px) {
+  .modal-card {
+    max-width: 95%;
+    margin: 1rem;
+  }
+  
+  .modal-footer {
+    flex-direction: column;
+  }
+  
+  .modal-footer button {
+    width: 100%;
+  }
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+/* TABLA DE ESTUDIANTES RESPONSIVE */
+@media (max-width: 640px) {
+  .student-row {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .sr-pin {
+    font-size: 0.75rem;
+  }
+}
+
+/* MEJORAR TACTOS EN MÓVIL */
+@media (max-width: 768px) {
+  button, 
+  .tab-btn,
+  .btn-primary,
+  .btn-outline,
+  .icon-btn,
+  .assign-chip {
+    min-height: 44px;
+  }
+  
+  input, 
+  select, 
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* EVITAR DESBORDE HORIZONTAL */
+body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+* {
+  max-width: 100%;
+  box-sizing: border-box;
 }
