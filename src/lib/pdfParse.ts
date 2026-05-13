@@ -7,6 +7,7 @@ export interface ParsedQuestion {
 const SKIP_PATTERNS = [
   /^Práctica de Matemáticas/,
   /^Matemáticas (Sétimo|Octavo|Noveno|Bachillerato)/,
+  /^Matemática Bachillerato/,
   /^SELECCIÓN ÚNICA/,
   /^\d+ ÍTEMS$/,
   /^ÍTEMS$/,
@@ -17,7 +18,10 @@ const SKIP_PATTERNS = [
   /^Tercer Ciclo/,
   /^General Básica/,
   /^Convenio MEP/,
-  /^Programa III/,
+  /^Convocatoria/,
+  /^BxM$/,
+  /^_{5,}/,
+  /^\d+$/,
 ]
 
 export function parseQuestionsFromText(rawText: string): ParsedQuestion[] {
@@ -32,9 +36,17 @@ export function parseQuestionsFromText(rawText: string): ParsedQuestion[] {
   while (i < lines.length) {
     const line = lines[i]
 
-    // Question: "10)" or "10) texto" — NOT "A)" options
-    const qMatch = /^(\d+)\)\s*(.*)/.exec(line)
-    if (qMatch && !/^[A-D]\)/.test(line)) {
+    // Format 1: "1)" or "1) texto"  — 7°, 8°, 9°
+    // Format 2: "9. ¿Cuál..."       — Bachillerato
+    const qParen = /^(\d+)\)\s*(.*)/.exec(line)
+    const qDot   = /^(\d+)\.\s+(.+)/.exec(line)
+
+    const isQParen = qParen && !/^[A-D]\)/.test(line)
+    const isQDot   = qDot && !/^[A-D]\./.test(line) && parseInt(qDot[1]) <= 100
+
+    const qMatch = isQParen ? qParen : isQDot ? qDot : null
+
+    if (qMatch) {
       if (current && current.options.length >= 3) questions.push(current)
       current   = { num: parseInt(qMatch[1]), text: qMatch[2].trim(), options: [] }
       inOptions = false
@@ -44,13 +56,13 @@ export function parseQuestionsFromText(rawText: string): ParsedQuestion[] {
 
     if (!current) { i++; continue }
 
-    // Option: "A)" or "A) texto"
-    const optMatch = /^([A-D])\)\s*(.*)/.exec(line)
+    // Options: "A) texto" or "A) " alone (both . and ) separators)
+    const optMatch = /^([A-D])[.)]\s*(.*)/.exec(line)
     if (optMatch) {
       inOptions = true
       const val: string[] = optMatch[2] ? [optMatch[2]] : []
       let j = i + 1
-      while (j < lines.length && !/^[A-D]\)|^\d+\)/.test(lines[j])) {
+      while (j < lines.length && !/^[A-D][.)]\s*|^\d+[.)]\s/.test(lines[j])) {
         val.push(lines[j])
         j++
       }
