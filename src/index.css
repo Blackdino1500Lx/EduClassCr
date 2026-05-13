@@ -1075,3 +1075,330 @@ html, body {
   word-break: break-word;
   overflow-wrap: break-word;
 }
+/* ============================================
+   RESPONSIVE MÓVIL - LANDING PAGE
+   ============================================ */
+@media (max-width: 768px) {
+  /* Ocultar Servicios y Acerca en móvil */
+  .nav-links {
+    display: none !important;
+  }
+  
+  /* Ajustar nav para móvil - solo logo y botón */
+  .nav-inner {
+    justify-content: space-between;
+    padding: 12px 16px;
+  }
+  
+  .nav-logo {
+    font-size: 1.25rem;
+  }
+  
+  /* Botón de portal docente más pequeño */
+  .nav-inner .btn-outline {
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+  
+  /* Hero section más compacto */
+  .hero {
+    padding: 40px 20px;
+    min-height: auto;
+  }
+  
+  .hero-content h1 {
+    font-size: 1.75rem;
+  }
+  
+  .hero-content p {
+    font-size: 0.875rem;
+  }
+  
+  .hero-ctas {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .btn-hero-primary,
+  .btn-hero-outline {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 20px;
+  }
+  
+  /* Features más compacto */
+  .features {
+    padding: 40px 16px;
+  }
+  
+  .feat-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  /* About section */
+  .about {
+    padding: 40px 16px;
+  }
+  
+  .about-inner {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+  
+  /* Footer */
+  .footer-inner {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+}
+
+/* ============================================
+   RESPONSIVE MÓVIL - TEACHER PORTAL
+   ============================================ */
+@media (max-width: 768px) {
+  /* Header del portal */
+  .portal-header {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  
+  /* Fila superior: Inicio y Salir */
+  .portal-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 0;
+  }
+  
+  /* Botones de inicio y salir */
+  .portal-header .back-btn {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+  
+  .portal-header .back-btn.ml-auto {
+    margin-left: 0;
+  }
+  
+  /* Ocultar texto de los botones, mostrar solo íconos */
+  .portal-header .back-btn span {
+    display: none;
+  }
+  
+  .portal-header .back-btn::before {
+  font-size: 1rem;
+  }
+  
+  /* Ajustar el primer botón (Inicio) */
+  .portal-header .back-btn:first-child {
+    font-size: 0;
+    padding: 6px 10px;
+  }
+  
+  .portal-header .back-btn:first-child::before {
+    content: "←";
+    font-size: 1.1rem;
+  }
+  
+  /* Ajustar botón Salir */
+  .portal-header .back-btn:last-child {
+    font-size: 0;
+    padding: 6px 10px;
+  }
+  
+  .portal-header .back-btn:last-child::before {
+    content: "🚪";
+    font-size: 1rem;
+  }
+  
+  /* Tabs - solo íconos en móvil */
+  .teacher-tabs {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+    justify-content: space-around;
+    margin-top: 5px;
+  }
+  
+  .tab-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px;
+    font-size: 0.6rem;
+    min-height: 50px;
+    border-radius: 8px;
+  }
+  
+  .tab-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  /* Ocultar texto del tab, mostrar solo ícono en móvil muy pequeño */
+  @media (max-width: 480px) {
+    .tab-btn span:not(.tab-badge) {
+      display: none;
+    }
+    
+    .tab-btn {
+      font-size: 0;
+    }
+    
+    .tab-badge {
+      font-size: 0.5rem;
+      padding: 1px 4px;
+      margin-left: 0;
+    }
+  }
+  
+  /* Contenido del portal */
+  .portal-content {
+    padding: 12px;
+  }
+  
+  /* Títulos más pequeños */
+  .portal-content h2 {
+    font-size: 1.25rem;
+  }
+  
+  .section-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .section-topbar h2 {
+    font-size: 1.125rem;
+  }
+  
+  /* Tarjetas en móvil */
+  .lib-card {
+    padding: 12px;
+  }
+  
+  .lib-card-title {
+    font-size: 0.85rem;
+  }
+  
+  /* Formularios */
+  .form-card {
+    padding: 16px;
+  }
+  
+  .form-card h3 {
+    font-size: 1rem;
+  }
+  
+  /* Tabla de alumnos */
+  .student-row {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  
+  .sr-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 0.75rem;
+  }
+  
+  .sr-info strong {
+    font-size: 0.8rem;
+  }
+  
+  .sr-info span {
+    font-size: 0.65rem;
+  }
+  
+  .sr-pin {
+    font-size: 0.65rem;
+    padding: 3px 8px;
+  }
+}
+
+/* ============================================
+   MEJORAS ADICIONALES PARA MÓVIL
+   ============================================ */
+@media (max-width: 480px) {
+  /* Grid de tarjetas siempre 1 columna */
+  .library-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Botones de acción en tarjetas apilados */
+  .lib-card-actions {
+    flex-direction: column;
+  }
+  
+  .lib-card-actions button {
+    width: 100%;
+  }
+  
+  /* Modal más compacto */
+  .modal-card {
+    max-width: 95%;
+    margin: 0.5rem;
+  }
+  
+  .modal-header {
+    padding: 12px 16px 0;
+  }
+  
+  .modal-header h3 {
+    font-size: 1rem;
+  }
+  
+  .modal-body {
+    padding: 12px 16px;
+  }
+  
+  .modal-footer {
+    padding: 12px 16px;
+    flex-direction: column;
+  }
+  
+  /* Filtros apilados */
+  .library-filters {
+    flex-direction: column;
+  }
+  
+  .filter-group {
+    width: 100%;
+  }
+  
+  /* Zone de subida */
+  .library-upload-zone {
+    padding: 12px;
+  }
+  
+  .lup-option {
+    flex-direction: column;
+    text-align: center;
+    padding: 12px;
+  }
+  
+  .lup-text {
+    width: 100%;
+  }
+}
+
+
+@media (min-width: 1368px) and (max-width: 1440px) {
+  .library-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  
+  .portal-content {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+}
