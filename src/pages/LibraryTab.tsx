@@ -52,7 +52,6 @@ interface UploadJob {
   subject: Subject
   status: 'pending' | 'uploading' | 'done' | 'error' | 'skipped'
   error?: string
-  imagesZip?: File | null
 }
 
 // ── Assign modal ─────────────────────────────────────────────────
@@ -189,7 +188,39 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
   const pdfRef = useRef<HTMLInputElement>(null)
   const imagesZipRef = useRef<HTMLInputElement>(null)
 
-  // ── Process single PDF with optional images ──────────────────────
+  // ── Process Images ZIP ─────────────────────────────────────────
+  const processImagesZip = async (zipFile: File, examKey: string) => {
+    const zip = await JSZip.loadAsync(zipFile)
+    const images: { file: File, name: string, questionNum: number }[] = []
+    
+    for (const [relativePath, entry] of Object.entries(zip.files)) {
+      if (entry.dir) continue
+      const ext = relativePath.toLowerCase()
+      if (!ext.endsWith('.png') && !ext.endsWith('.jpg') && !ext.endsWith('.jpeg')) continue
+      
+      const blob = await entry.async('blob')
+      const fileName = relativePath.split('/').pop() || relativePath
+      const imgFile = new File([blob], fileName, { type: 'image/png' })
+      const questionNum = parseInt(fileName.match(/\d+/)?.[0] || '0')
+      
+      images.push({ file: imgFile, name: fileName, questionNum })
+    }
+    
+    for (const img of images) {
+      const { url } = await db.storage.uploadFile(img.file)
+      await qImages.add({
+        examKey,
+        fromQ: img.questionNum,
+        toQ: img.questionNum,
+        imageUrl: url,
+        imageName: img.name,
+      })
+    }
+    
+    return images.length
+  }
+
+  // ── Process single PDF + Images ────────────────────────────────
   const handlePdf = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -201,6 +232,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
     setPendingSubject(subject)
     setPendingTitle(`${grade} · ${baseName}`)
     setPendingDesc('')
+    setPendingImagesZip(null)
     e.target.value = ''
   }
 
@@ -214,6 +246,8 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
   const confirmSinglePdf = async () => {
     if (!pendingFile || !pendingTitle.trim()) return
     
+    const examKey = qImages.buildExamKey(pendingTitle.replace(/[^a-zA-Z0-9]/g, '_'))
+    
     const job: UploadJob = {
       name: pendingFile.name, 
       path: pendingFile.name,
@@ -222,50 +256,21 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
       status: 'pending',
       customTitle: pendingTitle.trim(),
       customDesc:  pendingDesc.trim(),
-      imagesZip: pendingImagesZip
     }
     
     setJobs([job]); 
     setUploadDone(false); 
     
-    // Procesar imágenes si hay ZIP
+    // Subir PDF
+    await runUploadFiles([{ job, file: pendingFile }], examKey)
+    
+    // Subir imágenes si hay ZIP
     if (pendingImagesZip) {
-      await processImagesZip(pendingImagesZip, pendingTitle.trim())
+      await processImagesZip(pendingImagesZip, examKey)
     }
     
-    await runUploadFiles([{ job, file: pendingFile }])
     setPendingFile(null)
     setPendingImagesZip(null)
-  }
-
-  const processImagesZip = async (zipFile: File, examTitle: string) => {
-    try {
-      const zip = await JSZip.loadAsync(zipFile)
-      const examKey = qImages.buildExamKey(examTitle.replace(/[^a-zA-Z0-9]/g, '_'))
-      
-      for (const [relativePath, entry] of Object.entries(zip.files)) {
-        if (entry.dir) continue
-        const ext = relativePath.toLowerCase()
-        if (!ext.endsWith('.png') && !ext.endsWith('.jpg') && !ext.endsWith('.jpeg')) continue
-        
-        const blob = await entry.async('blob')
-        const fileName = relativePath.split('/').pop() || relativePath
-        const imgFile = new File([blob], fileName, { type: 'image/png' })
-        
-        const { url } = await db.storage.uploadFile(imgFile)
-        const questionNum = parseInt(fileName.match(/\d+/)?.[0] || '0')
-        
-        await qImages.add({
-          examKey,
-          fromQ: questionNum,
-          toQ: questionNum,
-          imageUrl: url,
-          imageName: fileName,
-        })
-      }
-    } catch (err) {
-      console.error('Error processing images zip:', err)
-    }
   }
 
   // ── Process ZIP ────────────────────────────────────────────────
@@ -334,7 +339,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
     reload()
   }
 
-  const runUploadFiles = async (pairs: { job: UploadJob; file: File }[]) => {
+  const runUploadFiles = async (pairs: { job: UploadJob; file: File }[], examKey: string) => {
     setUploading(true)
     const updated = pairs.map(p => p.job)
 
@@ -346,14 +351,13 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
       updated[i] = { ...job, status: 'uploading' }; setJobs([...updated])
       try {
         const { url } = await db.storage.uploadFile(file)
-        const sExamKey = qImages.buildExamKey(job.name.replace(/\.pdf$/i, ''))
         await db.lessons.add({
           title:      job.customTitle ?? `${job.grade} · ${job.name.replace('.pdf','').replace(/_/g,' ')}`,
           subject:    job.subject,
           content:    job.customDesc  ?? `Material — ${job.grade}.`,
           fileUrl:    url,
           fileName:   job.name,
-          examKey:    sExamKey,
+          examKey:    examKey,
           pageImages: [],
           assignedTo: [],
           isActive:   false,
@@ -434,13 +438,13 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
         </div>
       </div>
 
-      {/* Single PDF — full form modal with images option */}
+      {/* Single PDF — full form modal with images upload */}
       {pendingFile && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setPendingFile(null)}>
-          <div className="modal-card" style={{maxWidth:500}}>
+          <div className="modal-card" style={{maxWidth:550}}>
             <div className="modal-header">
               <div>
-                <h3>Agregar material</h3>
+                <h3>Agregar material educativo</h3>
                 <p className="modal-subtitle" style={{padding:0,marginTop:4}}>
                   📄 {pendingFile.name}
                 </p>
@@ -450,7 +454,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
             <div className="modal-body">
               <div className="form-grid">
                 <div className="field full">
-                  <label>Título del material</label>
+                  <label>Título del material *</label>
                   <input
                     value={pendingTitle}
                     onChange={e => setPendingTitle(e.target.value)}
@@ -458,13 +462,13 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
                   />
                 </div>
                 <div className="field">
-                  <label>Grado</label>
+                  <label>Grado *</label>
                   <select value={pendingGrade} onChange={e => setPendingGrade(e.target.value as Grade)}>
                     {GRADES.map(g => <option key={g}>{g}</option>)}
                   </select>
                 </div>
                 <div className="field">
-                  <label>Materia</label>
+                  <label>Materia *</label>
                   <select value={pendingSubject} onChange={e => setPendingSubject(e.target.value as Subject)}>
                     {SUBJECTS.map(s => <option key={s}>{s}</option>)}
                   </select>
@@ -478,7 +482,9 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
                     placeholder="Ej: Convocatoria 01 — Geometría y Trigonometría"
                   />
                 </div>
-                <div className="field full">
+                
+                {/* ── SECCIÓN PARA IMÁGENES ── */}
+                <div className="field full" style={{borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginTop: '0.5rem'}}>
                   <label>📷 ZIP de imágenes (opcional)</label>
                   <div className="image-zip-upload">
                     <button 
@@ -486,10 +492,12 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
                       className="btn-outline"
                       onClick={() => imagesZipRef.current?.click()}
                     >
-                      <ImageIcon size={14}/> {pendingImagesZip ? 'Cambiar ZIP' : 'Seleccionar ZIP'}
+                      <ImageIcon size={14}/> {pendingImagesZip ? 'Cambiar ZIP' : 'Seleccionar ZIP de imágenes'}
                     </button>
                     {pendingImagesZip && (
-                      <span className="selected-file">{pendingImagesZip.name}</span>
+                      <span className="selected-file">
+                        ✅ {pendingImagesZip.name}
+                      </span>
                     )}
                     <input 
                       ref={imagesZipRef} 
@@ -499,7 +507,9 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
                       onChange={handleImagesZip}
                     />
                   </div>
-                  <small className="hint-text">Las imágenes se asociarán automáticamente por número de pregunta</small>
+                  <small className="hint-text">
+                    Las imágenes se asociarán automáticamente por número de pregunta (ej: 1.png, 2.jpg, etc.)
+                  </small>
                 </div>
               </div>
             </div>
@@ -509,7 +519,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
                 setPendingImagesZip(null)
               }}>Cancelar</button>
               <button className="btn-primary" onClick={confirmSinglePdf} disabled={uploading}>
-                {uploading ? <><Loader2 size={14} className="spin"/> Subiendo...</> : <><Upload size={14}/> Subir material</>}
+                {uploading ? <><Loader2 size={14} className="spin"/> Subiendo...</> : <><Upload size={14}/> Subir {pendingImagesZip ? 'PDF + imágenes' : 'solo PDF'}</>}
               </button>
             </div>
           </div>

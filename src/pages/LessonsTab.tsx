@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import JSZip from 'jszip'
 import type { Lesson, Student, Subject } from '../lib/data'
-import { db } from '../lib/data'
-import { Plus, Trash2, AlertTriangle, Loader2, FileText, Users, Eye, EyeOff, Upload, Sparkles } from 'lucide-react'
+import { db, qImages } from '../lib/data'
 import CreatePracticeModal from './CreatePracticeModal'
+import { Plus, Trash2, AlertTriangle, Loader2, FileText, Users, Eye, EyeOff, Upload, Sparkles, Image as ImageIcon } from 'lucide-react'
 
 const SUBJECTS: Subject[] = ['Matemáticas', 'Español', 'Ciencias', 'Estudios Sociales', 'Inglés']
 
@@ -62,7 +63,6 @@ function SubjectSection({ subject, lessons, students, onToggleActive, onRemove, 
               </button>
             </div>
             
-            {/* Expanded content */}
             {expanded === l.id && (
               <div className="lesson-expanded" style={{marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0'}}>
                 {l.content && <p className="lesson-content" style={{fontSize: '0.875rem', marginBottom: '0.75rem'}}>{l.content}</p>}
@@ -81,7 +81,6 @@ function SubjectSection({ subject, lessons, students, onToggleActive, onRemove, 
               </div>
             )}
             
-            {/* View details button */}
             <button 
               className="view-details-btn" 
               onClick={() => setExpanded(expanded === l.id ? null : l.id)}
@@ -111,6 +110,8 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
   const [err, setErr]             = useState('')
   const [uploading, setUploading] = useState(false)
   const [createTarget, setCreateTarget] = useState<Lesson | null>(null)
+  const [pendingImagesZip, setPendingImagesZip] = useState<File | null>(null)
+  const imagesZipRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
     title: '', subject: SUBJECTS[0] as Subject,
@@ -130,13 +131,60 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
     finally { setUploading(false) }
   }
 
+  const handleImagesZip = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPendingImagesZip(file)
+    e.target.value = ''
+  }
+
+  const processImagesZip = async (zipFile: File, examKey: string) => {
+    const zip = await JSZip.loadAsync(zipFile)
+    const images: { file: File, name: string, questionNum: number }[] = []
+    
+    for (const [relativePath, entry] of Object.entries(zip.files)) {
+      if (entry.dir) continue
+      const ext = relativePath.toLowerCase()
+      if (!ext.endsWith('.png') && !ext.endsWith('.jpg') && !ext.endsWith('.jpeg')) continue
+      
+      const blob = await entry.async('blob')
+      const fileName = relativePath.split('/').pop() || relativePath
+      const imgFile = new File([blob], fileName, { type: 'image/png' })
+      const questionNum = parseInt(fileName.match(/\d+/)?.[0] || '0')
+      
+      images.push({ file: imgFile, name: fileName, questionNum })
+    }
+    
+    for (const img of images) {
+      const { url } = await db.storage.uploadFile(img.file)
+      await qImages.add({
+        examKey,
+        fromQ: img.questionNum,
+        toQ: img.questionNum,
+        imageUrl: url,
+        imageName: img.name,
+      })
+    }
+    
+    return images.length
+  }
+
   const save = async () => {
     if (!form.title.trim())           { setErr('El título es requerido'); return }
     if (form.assignedTo.length === 0) { setErr('Asigná a al menos un alumno'); return }
     if (!form.content && !form.fileUrl && !form.youtubeUrl) { setErr('Agregá contenido: texto, documento o video'); return }
+    
     setSaving(true); setErr('')
     try {
-      await db.lessons.add({ ...form })
+      const examKey = qImages.buildExamKey(form.title.replace(/[^a-zA-Z0-9]/g, '_'))
+      
+      await db.lessons.add({ ...form, examKey })
+      
+      if (pendingImagesZip) {
+        await processImagesZip(pendingImagesZip, examKey)
+        setPendingImagesZip(null)
+      }
+      
       await reload()
       setShowForm(false)
       setForm({ title: '', subject: SUBJECTS[0], content: '', youtubeUrl: '', fileUrl: '', fileName: '', assignedTo: [], isActive: true })
@@ -153,7 +201,6 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
     await db.lessons.update({ ...l, isActive: !l.isActive }); reload()
   }
 
-  // Agrupar por materia
   const lessonsBySubject = SUBJECTS.map(subject => ({
     subject,
     lessons: lessons.filter(l => l.subject === subject)
@@ -207,6 +254,34 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
             </div>
 
             <div className="field full">
+              <label>📷 ZIP de imágenes (opcional)</label>
+              <div className="image-zip-upload">
+                <button 
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => imagesZipRef.current?.click()}
+                >
+                  <ImageIcon size={14}/> {pendingImagesZip ? 'Cambiar ZIP' : 'Seleccionar ZIP de imágenes'}
+                </button>
+                {pendingImagesZip && (
+                  <span className="selected-file">
+                    ✅ {pendingImagesZip.name}
+                  </span>
+                )}
+                <input 
+                  ref={imagesZipRef} 
+                  type="file" 
+                  accept=".zip" 
+                  style={{display:'none'}} 
+                  onChange={handleImagesZip}
+                />
+              </div>
+              <small className="hint-text">
+                Las imágenes se asociarán automáticamente por número de pregunta al crear prácticas
+              </small>
+            </div>
+
+            <div className="field full">
               <label>Video de YouTube (URL)</label>
               <div className="input-icon-wrap">
                 📺
@@ -244,7 +319,11 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
 
           {err && <div className="error-msg"><AlertTriangle size={13}/> {err}</div>}
           <div className="form-actions">
-            <button className="btn-outline" onClick={() => { setShowForm(false); setErr('') }}>Cancelar</button>
+            <button className="btn-outline" onClick={() => { 
+              setShowForm(false); 
+              setErr(''); 
+              setPendingImagesZip(null);
+            }}>Cancelar</button>
             <button className="btn-primary" onClick={save} disabled={saving}>
               {saving ? <><Loader2 size={14} className="spin"/> Guardando...</> : 'Guardar lección'}
             </button>
@@ -252,7 +331,6 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
         </div>
       )}
 
-      {/* Lessons grid grouped by subject */}
       {lessons.length === 0 
         ? <p className="empty-hint">No hay lecciones aún. Creá una nueva lección para empezar.</p>
         : (
