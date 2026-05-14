@@ -1095,78 +1095,83 @@ html, body {
     white-space: nowrap;
   }
   
-  /* ========== TEACHER PORTAL ========== */
-  
-  /* Header: mantenerlo flexible pero ordenado */
+    /* ========== TEACHER PORTAL ========== */
+  /* Header del portal */
   .portal-header {
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    padding: 8px 12px;
-    gap: 10px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    gap: 8px;
+    flex-wrap: wrap;
   }
   
-  /* Fila superior: Inicio y Salir con texto normal */
+  /* Contenedor de botones Inicio y Salir */
   .portal-header-top {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    width: 100%;
+    gap: 6px;
   }
   
-  /* Botones con texto normal (no ocultar) */
+  /* Botones Inicio y Salir */
   .portal-header .back-btn {
-    font-size: 0.8rem;
-    padding: 6px 12px;
+    font-size: 0;
+    padding: 6px 10px;
     min-height: auto;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
   }
   
-  /* No agregar pseudo-elementos */
-  .portal-header .back-btn:first-child::before,
+  .portal-header .back-btn:first-child::before {
+    content: "←";
+    font-size: 1.1rem;
+  }
+  
   .portal-header .back-btn:last-child::before {
-    content: none;
+    content: "🚪";
+    font-size: 1rem;
   }
   
-  /* Tabs horizontales con solo íconos */
+  /* Tabs en línea horizontal - solo íconos */
   .teacher-tabs {
     display: flex;
     flex-direction: row;
-    gap: 8px;
-    width: 100%;
-    justify-content: space-around;
+    gap: 2px;
     margin: 0;
-    padding: 4px 0;
   }
   
   .tab-btn {
-    display: flex;
-    flex-direction: column;
+    display: inline-flex;
+    flex-direction: row;
     align-items: center;
-    gap: 4px;
-    padding: 8px 4px;
+    justify-content: center;
+    gap: 0;
+    padding: 6px 10px;
     font-size: 0;
-    min-height: 50px;
-    background: transparent;
-    flex: 1;
-    border-radius: 8px;
+    min-height: 40px;
+    width: 50px;
   }
   
-  /* Ocultar solo el texto del tab, mantener ícono y badge */
+  .tab-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  /* Ocultar texto, solo ícono */
   .tab-btn span:not(.tab-badge) {
     display: none;
   }
   
-  /* Mostrar badge si existe */
+  /* Badge flotante */
   .tab-badge {
-    display: inline-block;
-    font-size: 0.55rem;
-    padding: 1px 5px;
-    margin-left: 0;
+    font-size: 0.5rem;
+    padding: 1px 4px;
+    margin-left: -8px;
+    margin-top: -8px;
     position: relative;
-    top: -2px;
+    top: -4px;
   }
   
   /* Asegurar que los íconos se vean bien */
