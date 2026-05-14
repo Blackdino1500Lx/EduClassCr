@@ -1063,3 +1063,168 @@ html, body {
   word-break: break-word;
   overflow-wrap: break-word;
 }
+/* ============================================
+   RESPONSIVE MÓVIL SOLO PARA TELÉFONOS
+   ============================================ */
+
+/* Pantallas menores a 768px (teléfonos) */
+@media (max-width: 768px) {
+  
+  /* ========== LANDING PAGE ========== */
+  /* Ocultar Servicios y Acerca en el menú */
+  .nav-links {
+    display: none !important;
+  }
+  
+  /* Ajustar nav: solo logo y botón */
+  .nav-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+  }
+  
+  .nav-logo {
+    font-size: 1.25rem;
+  }
+  
+  /* Botón Portal Docente más compacto */
+  .nav-inner .btn-outline {
+    padding: 6px 12px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+  
+  /* ========== TEACHER PORTAL ========== */
+  /* Header del portal en columna */
+  .portal-header {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  
+  /* Fila superior para Inicio y Salir */
+  .portal-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+  
+  /* Ocultar texto de los botones, mostrar solo íconos */
+  .portal-header .back-btn {
+    font-size: 0;
+    padding: 6px 10px;
+    min-height: auto;
+  }
+  
+  .portal-header .back-btn:first-child::before {
+    content: "←";
+    font-size: 1.1rem;
+  }
+  
+  .portal-header .back-btn:last-child::before {
+    content: "🚪";
+    font-size: 1rem;
+  }
+  
+  /* Tabs horizontales con solo íconos */
+  .teacher-tabs {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+    justify-content: space-around;
+    margin: 0;
+  }
+  
+  .tab-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px;
+    font-size: 0.6rem;
+    min-height: 50px;
+    background: transparent;
+  }
+  
+  /* Ocultar texto del tab, mostrar solo ícono */
+  .tab-btn span:not(.tab-badge) {
+    display: none;
+  }
+  
+  .tab-btn {
+    font-size: 0;
+  }
+  
+  .tab-badge {
+    font-size: 0.5rem;
+    padding: 1px 4px;
+    margin-left: 0;
+    position: relative;
+    top: -2px;
+  }
+  
+  /* Ajustar badges en tabs */
+  .tab-btn .tab-badge {
+    display: inline-block;
+  }
+}
+
+/* ============================================
+   TELÉFONOS MUY PEQUEÑOS (menos de 480px)
+   ============================================ */
+@media (max-width: 480px) {
+  /* Tarjetas siempre 1 columna */
+  .library-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Botones apilados */
+  .lib-card-actions {
+    flex-direction: column;
+  }
+  
+  .lib-card-actions button {
+    width: 100%;
+  }
+  
+  /* Filtros apilados */
+  .library-filters {
+    flex-direction: column;
+  }
+  
+  .filter-group {
+    width: 100%;
+  }
+  
+  /* Zona de subida vertical */
+  .library-upload-zone {
+    padding: 12px;
+  }
+  
+  .lup-option {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .lup-text {
+    width: 100%;
+  }
+  
+  /* Modal más compacto */
+  .modal-card {
+    max-width: 95%;
+    margin: 0.5rem;
+  }
+  
+  .modal-footer {
+    flex-direction: column;
+  }
+  
+  .modal-footer button {
+    width: 100%;
+  }
+}
