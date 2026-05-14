@@ -1096,16 +1096,17 @@ html, body {
   }
   
   /* ========== TEACHER PORTAL ========== */
-  /* Header del portal en columna */
+  
+  /* Header: mantenerlo flexible pero ordenado */
   .portal-header {
     display: flex;
     flex-direction: column;
     align-items: stretch;
     padding: 8px 12px;
-    gap: 8px;
+    gap: 10px;
   }
   
-  /* Fila superior para Inicio y Salir */
+  /* Fila superior: Inicio y Salir con texto normal */
   .portal-header-top {
     display: flex;
     justify-content: space-between;
@@ -1113,30 +1114,31 @@ html, body {
     width: 100%;
   }
   
-  /* Ocultar texto de los botones, mostrar solo íconos */
+  /* Botones con texto normal (no ocultar) */
   .portal-header .back-btn {
-    font-size: 0;
-    padding: 6px 10px;
+    font-size: 0.8rem;
+    padding: 6px 12px;
     min-height: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
   
-  .portal-header .back-btn:first-child::before {
-    content: "←";
-    font-size: 1.1rem;
-  }
-  
+  /* No agregar pseudo-elementos */
+  .portal-header .back-btn:first-child::before,
   .portal-header .back-btn:last-child::before {
-    content: "🚪";
-    font-size: 1rem;
+    content: none;
   }
   
   /* Tabs horizontales con solo íconos */
   .teacher-tabs {
     display: flex;
-    gap: 4px;
+    flex-direction: row;
+    gap: 8px;
     width: 100%;
     justify-content: space-around;
     margin: 0;
+    padding: 4px 0;
   }
   
   .tab-btn {
@@ -1145,31 +1147,32 @@ html, body {
     align-items: center;
     gap: 4px;
     padding: 8px 4px;
-    font-size: 0.6rem;
+    font-size: 0;
     min-height: 50px;
     background: transparent;
+    flex: 1;
+    border-radius: 8px;
   }
   
-  /* Ocultar texto del tab, mostrar solo ícono */
+  /* Ocultar solo el texto del tab, mantener ícono y badge */
   .tab-btn span:not(.tab-badge) {
     display: none;
   }
   
-  .tab-btn {
-    font-size: 0;
-  }
-  
+  /* Mostrar badge si existe */
   .tab-badge {
-    font-size: 0.5rem;
-    padding: 1px 4px;
+    display: inline-block;
+    font-size: 0.55rem;
+    padding: 1px 5px;
     margin-left: 0;
     position: relative;
     top: -2px;
   }
   
-  /* Ajustar badges en tabs */
-  .tab-btn .tab-badge {
-    display: inline-block;
+  /* Asegurar que los íconos se vean bien */
+  .tab-btn svg {
+    width: 20px;
+    height: 20px;
   }
 }
 
@@ -1226,5 +1229,11 @@ html, body {
   
   .modal-footer button {
     width: 100%;
+  }
+  
+  /* Tabs más pequeños */
+  .tab-btn svg {
+    width: 18px !important;
+    height: 18px !important;
   }
 }
