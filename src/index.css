@@ -1130,7 +1130,6 @@ html, body {
   }
   
   .portal-header .back-btn:last-child::before {
-    content: "🚪";
     font-size: 1rem;
   }
   
@@ -1138,7 +1137,7 @@ html, body {
   .teacher-tabs {
     display: flex;
     flex-direction: row;
-    gap: 2px;
+    gap: 0;
     margin: 0;
   }
   
@@ -1148,7 +1147,7 @@ html, body {
     align-items: center;
     justify-content: center;
     gap: 0;
-    padding: 6px 10px;
+    padding: 6px 5px;
     font-size: 0;
     min-height: 40px;
     width: 50px;
