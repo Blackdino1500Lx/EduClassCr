@@ -1079,7 +1079,7 @@ html, body {
   /* Ajustar nav: solo logo y botón */
   .nav-inner {
     display: flex;
-    justify-content: space-between;
+    justify-content: space-evenly;
     align-items: center;
     padding: 10px 16px;
   }
