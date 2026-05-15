@@ -94,7 +94,10 @@ export default function TeacherPortal({ setView }: Props) {
     <div className="portal-root teacher-portal">
       <div className="portal-header">
         <div className="portal-header-row">
-          <button className="back-btn" onClick={() => setView('landing')}><ArrowLeft size={16}/> <span className="btn-label">Inicio</span></button>
+          <div className="portal-header-top">
+            <button className="back-btn" onClick={() => setView('landing')}><ArrowLeft size={16}/> <span className="btn-label">Inicio</span></button>
+            <button className="back-btn" onClick={() => auth.signOut()}><LogOut size={16}/> <span className="btn-label">Salir</span></button>
+          </div>
           <div className="teacher-tabs">
             {([
               { id: 'students',  icon: <Users size={18}/>,        label: 'Alumnos' },
@@ -112,7 +115,6 @@ export default function TeacherPortal({ setView }: Props) {
               </button>
             ))}
           </div>
-          <button className="back-btn" onClick={() => auth.signOut()}><LogOut size={16}/> <span className="btn-label">Salir</span></button>
         </div>
       </div>
 

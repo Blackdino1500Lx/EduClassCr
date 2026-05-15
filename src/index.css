@@ -751,6 +751,11 @@ a { color: inherit; text-decoration: none; }
   max-width: 100%;
 }
 
+/* Desktop: top row hidden as separate element, buttons inline */
+.portal-header-top {
+  display: contents; /* children appear inline in the flex row */
+}
+
 .portal-header .back-btn {
   display: inline-flex;
   align-items: center;
@@ -815,32 +820,48 @@ a { color: inherit; text-decoration: none; }
   .hero-visual { display: none; }
   .about-inner { grid-template-columns: 1fr; }
 
-  /* Portal header: una sola fila compacta */
+  /* Portal header: DOS FILAS en móvil */
   .portal-header-row {
-    padding: 8px 10px;
-    gap: 6px;
-  }
-
-  /* Back btn: solo ícono en móvil */
-  .portal-header .back-btn .btn-label { display: none; }
-  .portal-header .back-btn {
-    padding: 6px 8px;
-    min-height: auto;
-  }
-
-  /* Tabs: solo íconos */
-  .teacher-tabs {
-    flex: 1;
-    justify-content: space-around;
+    flex-direction: column;
+    padding: 0;
     gap: 0;
-    padding: 3px;
   }
 
+  /* Fila 1: Inicio | espacio | Salir */
+  .portal-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    width: 100%;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Fila 2: tabs full width */
+  .teacher-tabs {
+    width: 100%;
+    justify-content: space-around;
+    border-radius: 0;
+    padding: 4px 8px;
+    gap: 2px;
+    background: var(--cream);
+    margin: 0;
+  }
+
+  /* Back btn: ícono + texto corto */
+  .portal-header .back-btn {
+    padding: 4px 8px;
+    min-height: auto;
+    font-size: 13px;
+  }
+  .portal-header .back-btn .btn-label { display: inline; }
+
+  /* Cada tab: solo ícono, espacio igual */
   .tab-btn {
     flex: 1;
     flex-direction: column;
-    gap: 0;
-    padding: 7px 4px;
+    gap: 2px;
+    padding: 6px 4px;
     justify-content: center;
     font-size: 0;
     min-height: auto;
