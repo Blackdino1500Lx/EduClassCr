@@ -825,30 +825,32 @@ a { color: inherit; text-decoration: none; }
     flex-direction: column;
     padding: 0;
     gap: 0;
+    align-items: stretch;
   }
 
-  /* Fila 1: Inicio | espacio | Salir */
+  /* Fila 1: Inicio a la izq, Salir a la der */
   .portal-header-top {
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 14px;
+    padding: 8px 16px;
     width: 100%;
     border-bottom: 1px solid var(--border);
   }
 
   /* Fila 2: tabs full width */
   .teacher-tabs {
-    width: 100%;
+    width: 100% !important;
     justify-content: space-around;
     border-radius: 0;
-    padding: 4px 8px;
-    gap: 2px;
+    padding: 4px 6px;
+    gap: 0;
     background: var(--cream);
     margin: 0;
+    box-sizing: border-box;
   }
 
-  /* Back btn: ícono + texto corto */
+  /* Back btn texto visible */
   .portal-header .back-btn {
     padding: 4px 8px;
     min-height: auto;
