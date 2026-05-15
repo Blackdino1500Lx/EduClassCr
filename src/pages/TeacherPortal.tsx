@@ -93,22 +93,45 @@ export default function TeacherPortal({ setView }: Props) {
   return (
     <div className="portal-root teacher-portal">
       <div className="portal-header">
-        <div className="portal-header-row">
-          <div className="portal-header-top">
-            <button className="back-btn" onClick={() => setView('landing')}><ArrowLeft size={16}/> <span className="btn-label">Inicio</span></button>
-            <button className="back-btn" onClick={() => auth.signOut()}><LogOut size={16}/> <span className="btn-label">Salir</span></button>
-          </div>
+        {/* Desktop row: Inicio | tabs | Salir */}
+        <div className="ph-desktop">
+          <button className="back-btn" onClick={() => setView('landing')}><ArrowLeft size={16}/> Inicio</button>
           <div className="teacher-tabs">
             {([
-              { id: 'students',  icon: <Users size={18}/>,        label: 'Alumnos' },
-              { id: 'library',   icon: <FolderOpen size={18}/>,   label: 'Biblioteca' },
-              { id: 'lessons',   icon: <Layout size={18}/>,       label: 'Lecciones' },
-              { id: 'practices', icon: <BookOpen size={18}/>,     label: 'Prácticas' },
-              { id: 'reviews',   icon: <ClipboardList size={18}/>, label: 'Revisiones' },
+              { id: 'students',  icon: <Users size={16}/>,        label: 'Alumnos' },
+              { id: 'library',   icon: <FolderOpen size={16}/>,   label: 'Biblioteca' },
+              { id: 'lessons',   icon: <Layout size={16}/>,       label: 'Lecciones' },
+              { id: 'practices', icon: <BookOpen size={16}/>,     label: 'Prácticas' },
+              { id: 'reviews',   icon: <ClipboardList size={16}/>, label: 'Revisiones' },
             ] as const).map(t => (
               <button key={t.id} className={`tab-btn ${tab === t.id ? 'active' : ''}`}
                 onClick={() => { setTab(t.id); reload() }}>
-                {t.icon}<span className="btn-label">{t.label}</span>
+                {t.icon}{t.label}
+                {t.id === 'reviews' && submissions.filter(s => !s.reviewed).length > 0 && (
+                  <span className="tab-badge">{submissions.filter(s => !s.reviewed).length}</span>
+                )}
+              </button>
+            ))}
+          </div>
+          <button className="back-btn" onClick={() => auth.signOut()}><LogOut size={16}/> Salir</button>
+        </div>
+        {/* Mobile: fila 1 Inicio/Salir, fila 2 tabs */}
+        <div className="ph-mobile">
+          <div className="ph-mobile-top">
+            <button className="back-btn" onClick={() => setView('landing')}><ArrowLeft size={16}/> Inicio</button>
+            <button className="back-btn" onClick={() => auth.signOut()}><LogOut size={16}/> Salir</button>
+          </div>
+          <div className="teacher-tabs ph-mobile-tabs">
+            {([
+              { id: 'students',  icon: <Users size={20}/>,        label: 'Alumnos' },
+              { id: 'library',   icon: <FolderOpen size={20}/>,   label: 'Biblioteca' },
+              { id: 'lessons',   icon: <Layout size={20}/>,       label: 'Lecciones' },
+              { id: 'practices', icon: <BookOpen size={20}/>,     label: 'Prácticas' },
+              { id: 'reviews',   icon: <ClipboardList size={20}/>, label: 'Revisiones' },
+            ] as const).map(t => (
+              <button key={t.id} className={`tab-btn ${tab === t.id ? 'active' : ''}`}
+                onClick={() => { setTab(t.id); reload() }}>
+                {t.icon}
                 {t.id === 'reviews' && submissions.filter(s => !s.reviewed).length > 0 && (
                   <span className="tab-badge">{submissions.filter(s => !s.reviewed).length}</span>
                 )}
