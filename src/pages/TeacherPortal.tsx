@@ -93,25 +93,27 @@ export default function TeacherPortal({ setView }: Props) {
   return (
     <div className="portal-root teacher-portal">
       <div className="portal-header">
-        <button className="back-btn" onClick={() => setView('landing')}><ArrowLeft size={16}/> Inicio</button>
-        <div className="teacher-tabs">
-          {([
-            { id: 'students',  icon: <Users size={15}/>,        label: 'Alumnos' },
-            { id: 'library',   icon: <FolderOpen size={15}/>,    label: 'Biblioteca' },
-            { id: 'lessons',   icon: <Layout size={15}/>,       label: 'Lecciones' },
-            { id: 'practices', icon: <BookOpen size={15}/>,     label: 'Prácticas' },
-            { id: 'reviews',   icon: <ClipboardList size={15}/>, label: 'Revisiones' },
-          ] as const).map(t => (
-            <button key={t.id} className={`tab-btn ${tab === t.id ? 'active' : ''}`}
-              onClick={() => { setTab(t.id); reload() }}>
-              {t.icon}{t.label}
-              {t.id === 'reviews' && submissions.filter(s => !s.reviewed).length > 0 && (
-                <span className="tab-badge">{submissions.filter(s => !s.reviewed).length}</span>
-              )}
-            </button>
-          ))}
+        <div className="portal-header-row">
+          <button className="back-btn" onClick={() => setView('landing')}><ArrowLeft size={16}/> <span className="btn-label">Inicio</span></button>
+          <div className="teacher-tabs">
+            {([
+              { id: 'students',  icon: <Users size={18}/>,        label: 'Alumnos' },
+              { id: 'library',   icon: <FolderOpen size={18}/>,   label: 'Biblioteca' },
+              { id: 'lessons',   icon: <Layout size={18}/>,       label: 'Lecciones' },
+              { id: 'practices', icon: <BookOpen size={18}/>,     label: 'Prácticas' },
+              { id: 'reviews',   icon: <ClipboardList size={18}/>, label: 'Revisiones' },
+            ] as const).map(t => (
+              <button key={t.id} className={`tab-btn ${tab === t.id ? 'active' : ''}`}
+                onClick={() => { setTab(t.id); reload() }}>
+                {t.icon}<span className="btn-label">{t.label}</span>
+                {t.id === 'reviews' && submissions.filter(s => !s.reviewed).length > 0 && (
+                  <span className="tab-badge">{submissions.filter(s => !s.reviewed).length}</span>
+                )}
+              </button>
+            ))}
+          </div>
+          <button className="back-btn" onClick={() => auth.signOut()}><LogOut size={16}/> <span className="btn-label">Salir</span></button>
         </div>
-        <button className="back-btn ml-auto" onClick={() => auth.signOut()}><LogOut size={15}/> Salir</button>
       </div>
 
       <div className="portal-content">
