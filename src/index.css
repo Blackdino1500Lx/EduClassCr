@@ -751,9 +751,20 @@ a { color: inherit; text-decoration: none; }
   max-width: 100%;
 }
 
-/* Desktop: top row hidden as separate element, buttons inline */
+/* Desktop: top row is invisible wrapper, children flow inline */
 .portal-header-top {
-  display: contents; /* children appear inline in the flex row */
+  display: contents;
+}
+
+@media (max-width: 768px) {
+  .portal-header-top {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    width: 100%;
+    border-bottom: 1px solid var(--border);
+  }
 }
 
 .portal-header .back-btn {
@@ -826,16 +837,6 @@ a { color: inherit; text-decoration: none; }
     padding: 0;
     gap: 0;
     align-items: stretch;
-  }
-
-  /* Fila 1: Inicio a la izq, Salir a la der */
-  .portal-header-top {
-    display: flex !important;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 16px;
-    width: 100%;
-    border-bottom: 1px solid var(--border);
   }
 
   /* Fila 2: tabs full width */
