@@ -263,6 +263,11 @@ console.log('Primeras líneas:', pdfText.slice(0, 500))
                             <p className="hint-text">Círculo = respuesta correcta</p>
                           </div>
                         )}
+                        <label className="sandbox-toggle-label" style={{marginTop:8}}>
+                          <input type="checkbox" checked={q.hasSandbox ?? false}
+                            onChange={e => updateQ(q.id, { hasSandbox: e.target.checked })}/>
+                          <span>🎨 Habilitar sandbox (texto + dibujo libre)</span>
+                        </label>
                         <button className="btn-outline sm" style={{marginTop:8}} onClick={() => setEditingQ(null)}>
                           <Check size={12}/> Listo
                         </button>
