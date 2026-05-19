@@ -317,14 +317,26 @@ export default function StudentPortal({ setView }: Props) {
                         placeholder="Escribí o dibujá tu desarrollo aquí..."
                       />
                     : <SecureTextarea isMath={isMath} flagsRef={flagsRef} value={String(answers[q.id]??'')} onChange={v=>setAnswer(q.id,v)} placeholder="Escribí tu respuesta aquí..."/>
-                  : <div className="options-list">
-                      {q.options?.map((opt,oi)=>(
-                        <label key={oi} className={`option-label ${answers[q.id]===oi?'selected':''}`}>
-                          <input type="radio" name={`q-${q.id}`} checked={answers[q.id]===oi} onChange={()=>setAnswer(q.id,oi)}/>
-                          <span className="opt-letter">{String.fromCharCode(65+oi)}</span>{opt}
-                        </label>
-                      ))}
-                    </div>
+                  : <>
+                      <div className="options-list">
+                        {q.options?.map((opt,oi)=>(
+                          <label key={oi} className={`option-label ${answers[q.id]===oi?'selected':''}`}>
+                            <input type="radio" name={`q-${q.id}`} checked={answers[q.id]===oi} onChange={()=>setAnswer(q.id,oi)}/>
+                            <span className="opt-letter">{String.fromCharCode(65+oi)}</span>{opt}
+                          </label>
+                        ))}
+                      </div>
+                      {q.hasSandbox && (
+                        <MathSandbox
+                          textValue={String(answers[`${q.id}_text`] ?? '')}
+                          canvasValue={canvasImages[q.id] ?? ''}
+                          onTextChange={v => setAnswer(`${q.id}_text`, v)}
+                          onCanvasChange={img => setCanvasImages(prev => ({ ...prev, [q.id]: img }))}
+                          flagsRef={flagsRef}
+                          placeholder="Mostrá tu desarrollo aquí (opcional)..."
+                        />
+                      )}
+                    </>
                 }
               </div>
             ))}

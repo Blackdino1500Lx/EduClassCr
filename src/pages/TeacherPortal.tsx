@@ -352,12 +352,10 @@ function PracticesTab({ practices, students, lessons, reload }: { practices: Pra
                   </div>
                 </div>
                 <textarea rows={2} className="q-input" placeholder="Enunciado" value={q.text} onChange={e => updateQ(q.id, { text: e.target.value })}/>
-                {q.type === 'open' && (
-                  <label className="sandbox-toggle-label">
-                    <input type="checkbox" checked={q.hasSandbox ?? false} onChange={e => updateQ(q.id, { hasSandbox: e.target.checked })}/>
-                    <span>🎨 Habilitar sandbox (texto + dibujo libre)</span>
-                  </label>
-                )}
+                <label className="sandbox-toggle-label">
+                  <input type="checkbox" checked={q.hasSandbox ?? false} onChange={e => updateQ(q.id, { hasSandbox: e.target.checked })}/>
+                  <span>🎨 Habilitar sandbox (texto + dibujo libre)</span>
+                </label>
                 {q.type === 'multiple' && q.options && (
                   <div className="options-builder">
                     {q.options.map((opt, oi) => (
