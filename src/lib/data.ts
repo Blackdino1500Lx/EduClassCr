@@ -11,8 +11,10 @@ export interface Student {
 export interface Question {
   id: string; text: string; type: 'open' | 'multiple'
   options?: string[]; correctOption?: number; points: number
-  imageUrl?: string  // imagen adjunta (para gráficas de matemáticas)
+  imageUrl?: string     // imagen adjunta (para gráficas de matemáticas)
+  hasSandbox?: boolean  // sandbox de texto+dibujo para desarrollo de matemáticas
 }
+
 export interface Lesson {
   id: string; title: string; subject: Subject
   content?: string       // texto enriquecido
@@ -31,7 +33,11 @@ export interface Practice {
   createdAt: string; isActive: boolean
   lessonId?: string      // lección asociada opcional
 }
-export interface Answer { questionId: string; value: string | number }
+export interface Answer {
+  questionId: string
+  value: string | number
+  canvasImage?: string   // imagen PNG base64 del sandbox (solo preguntas con hasSandbox)
+}
 export interface Submission {
   id: string; practiceId: string; studentId: string; answers: Answer[]
   submittedAt: string; score?: number; reviewed: boolean

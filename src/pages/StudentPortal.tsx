@@ -3,6 +3,7 @@ import type { AppView } from '../App'
 import type { Student, Practice, Lesson } from '../lib/data'
 import { db } from '../lib/data'
 import { ArrowLeft, BookOpen, Lock, AlertTriangle, CheckCircle, Clock, Send, ChevronRight, Loader2, FileText, ChevronDown, ChevronUp } from 'lucide-react'
+import MathSandbox from '../components/MathSandbox'
 
 interface Props { setView: (v: AppView) => void }
 type Screen = 'login' | 'home' | 'lesson' | 'practice'
@@ -54,6 +55,7 @@ export default function StudentPortal({ setView }: Props) {
   const [activePractice, setActive]     = useState<Practice | null>(null)
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null)
   const [answers, setAnswers]           = useState<Record<string, string | number>>({})
+  const [canvasImages, setCanvasImages] = useState<Record<string, string>>({})
   const [loginErr, setLoginErr]         = useState('')
   const [submitted, setSubmitted]       = useState(false)
   const [loggingIn, setLoggingIn]       = useState(false)
@@ -81,7 +83,7 @@ export default function StudentPortal({ setView }: Props) {
 
   const startPractice = (p: Practice) => {
     const lesson = p.lessonId ? lessons.find(l => l.id === p.lessonId) ?? null : null
-    setActive(p); setActiveLesson(lesson); setAnswers({}); setSubmitted(false)
+    setActive(p); setActiveLesson(lesson); setAnswers({}); setCanvasImages({}); setSubmitted(false)
     flagsRef.current = []; setLessonExpanded(true)
     setScreen(lesson ? 'lesson' : 'practice')
   }
@@ -90,7 +92,10 @@ export default function StudentPortal({ setView }: Props) {
 
   const handleSubmit = async () => {
     if (!activePractice || !student) return
-    const unanswered = activePractice.questions.filter(q => answers[q.id] === undefined || answers[q.id] === '')
+    const unanswered = activePractice.questions.filter(q => {
+      if (q.hasSandbox) return (!answers[q.id] || answers[q.id] === '') && !canvasImages[q.id]
+      return answers[q.id] === undefined || answers[q.id] === ''
+    })
     if (unanswered.length > 0) { alert(`Faltan ${unanswered.length} pregunta(s) por responder.`); return }
     const isMath = activePractice.subject === 'Matemáticas'
     let autoScore: number | undefined = undefined
@@ -100,7 +105,15 @@ export default function StudentPortal({ setView }: Props) {
     }
     setSubmitting(true)
     try {
-      await db.submissions.add({ practiceId: activePractice.id, studentId: student.id, answers: activePractice.questions.map(q => ({ questionId: q.id, value: answers[q.id] ?? '' })), score: autoScore, reviewed: !isMath, antiCheatFlags: flagsRef.current, teacherNote: undefined })
+      await db.submissions.add({
+        practiceId: activePractice.id, studentId: student.id,
+        answers: activePractice.questions.map(q => ({
+          questionId: q.id,
+          value: answers[q.id] ?? '',
+          canvasImage: q.hasSandbox ? (canvasImages[q.id] ?? undefined) : undefined,
+        })),
+        score: autoScore, reviewed: !isMath, antiCheatFlags: flagsRef.current, teacherNote: undefined,
+      })
       setSubmittedIds(prev => new Set([...prev, activePractice.id]))
       setSubmitted(true)
     } catch (_e) { alert('Error al entregar. Intentá de nuevo.') }
@@ -294,7 +307,16 @@ export default function StudentPortal({ setView }: Props) {
                 </div>
                 <p className="q-text">{q.text}</p>
                 {q.type==='open'
-                  ? <SecureTextarea isMath={isMath} flagsRef={flagsRef} value={String(answers[q.id]??'')} onChange={v=>setAnswer(q.id,v)} placeholder="Escribí tu respuesta aquí..."/>
+                  ? q.hasSandbox
+                    ? <MathSandbox
+                        textValue={String(answers[q.id] ?? '')}
+                        canvasValue={canvasImages[q.id] ?? ''}
+                        onTextChange={v => setAnswer(q.id, v)}
+                        onCanvasChange={img => setCanvasImages(prev => ({ ...prev, [q.id]: img }))}
+                        flagsRef={flagsRef}
+                        placeholder="Escribí o dibujá tu desarrollo aquí..."
+                      />
+                    : <SecureTextarea isMath={isMath} flagsRef={flagsRef} value={String(answers[q.id]??'')} onChange={v=>setAnswer(q.id,v)} placeholder="Escribí tu respuesta aquí..."/>
                   : <div className="options-list">
                       {q.options?.map((opt,oi)=>(
                         <label key={oi} className={`option-label ${answers[q.id]===oi?'selected':''}`}>
