@@ -1013,18 +1013,4 @@ a { color: inherit; text-decoration: none; }
 html, body { overflow-x: hidden; width: 100%; }
 * { max-width: 100%; box-sizing: border-box; }
 .portal-root, .portal-content, .subject-section, .lib-card { overflow-x: hidden; }
-.lib-card-title, .lib-card-file { word-break: break-word; overflow-wrap: break-word; }rid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-  .portal-content { max-width: 100%; padding: 24px 20px; }
-  .nav-inner { padding: 14px 20px; }
-  .nav-links { gap: 14px; }
-  .tab-btn { padding: 8px 10px; font-size: 12px; }
-  .section-topbar h2 { font-size: 20px; }
-}
-
-/* ============================================
-   EVITAR DESBORDE
-   ============================================ */
-html, body { overflow-x: hidden; width: 100%; }
-* { max-width: 100%; box-sizing: border-box; }
-.portal-root, .portal-content, .subject-section, .lib-card { overflow-x: hidden; }
 .lib-card-title, .lib-card-file { word-break: break-word; overflow-wrap: break-word; }
