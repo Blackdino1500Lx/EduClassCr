@@ -910,8 +910,8 @@ a { color: inherit; text-decoration: none; }
     min-height: auto !important;
   }
 
-  /* Hero: sin altura forzada en móvil */
-  .hero { min-height: auto; padding: 40px 16px 48px; }
+  /* Hero: pantalla completa en móvil */
+  .hero { min-height: 100svh; min-height: 100vh; padding: 0 16px; display: flex; align-items: center; }
 
   /* Footer: apilar en móvil */
   .footer-inner { flex-direction: column; gap: 10px; text-align: center; }
