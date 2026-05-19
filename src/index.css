@@ -757,7 +757,7 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -844,30 +844,51 @@ a { color: inherit; text-decoration: none; }
   .ph-desktop { display: none !important; }
   .ph-mobile  { display: block !important; }
 
-  /* Cada tab: solo ícono, espacio igual */
+  /* Barra de tabs móvil: fondo blanco, indicador inferior, distribuida */
+  .ph-mobile-tabs {
+    background: white !important;
+    border-top: 1px solid var(--border) !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    gap: 0 !important;
+    justify-content: space-evenly !important;
+  }
+
+  /* Cada tab: solo ícono con touch target generoso */
   .tab-btn {
     flex: 1;
     flex-direction: column;
-    gap: 2px;
-    padding: 6px 4px;
+    align-items: center;
     justify-content: center;
+    gap: 0;
+    padding: 10px 4px 8px;
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+    background: none !important;
+    box-shadow: none !important;
     font-size: 0;
-    min-height: auto;
+    min-height: 48px;
+    transition: border-color .15s, color .15s;
   }
 
-  .tab-btn .btn-label { display: none; }
+  .tab-btn.active {
+    background: none !important;
+    box-shadow: none !important;
+    border-bottom: 3px solid var(--coral) !important;
+    color: var(--coral) !important;
+  }
 
   .tab-btn svg {
-    width: 20px !important;
-    height: 20px !important;
+    width: 22px !important;
+    height: 22px !important;
   }
 
   .tab-badge {
     position: absolute;
-    top: 1px; right: 1px;
+    top: 4px; right: 6px;
     font-size: 9px;
-    padding: 1px 3px;
-    min-width: 13px;
+    padding: 1px 4px;
+    min-width: 14px;
   }
 
   /* Formularios */
@@ -979,6 +1000,20 @@ a { color: inherit; text-decoration: none; }
   .about-inner { gap: 32px; }
   .hero-content h1 { font-size: clamp(32px, 4vw, 50px); }
   .feat-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  .portal-content { max-width: 100%; padding: 24px 20px; }
+  .nav-inner { padding: 14px 20px; }
+  .nav-links { gap: 14px; }
+  .tab-btn { padding: 8px 10px; font-size: 12px; }
+  .section-topbar h2 { font-size: 20px; }
+}
+
+/* ============================================
+   EVITAR DESBORDE
+   ============================================ */
+html, body { overflow-x: hidden; width: 100%; }
+* { max-width: 100%; box-sizing: border-box; }
+.portal-root, .portal-content, .subject-section, .lib-card { overflow-x: hidden; }
+.lib-card-title, .lib-card-file { word-break: break-word; overflow-wrap: break-word; }rid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
   .portal-content { max-width: 100%; padding: 24px 20px; }
   .nav-inner { padding: 14px 20px; }
   .nav-links { gap: 14px; }
