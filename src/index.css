@@ -887,6 +887,59 @@ a { color: inherit; text-decoration: none; }
   button, .btn-primary, .btn-outline, .icon-btn, .assign-chip {
     min-height: auto !important;
   }
+
+  /* Hero: sin altura forzada en móvil */
+  .hero { min-height: auto; padding: 40px 16px 48px; }
+
+  /* Footer: apilar en móvil */
+  .footer-inner { flex-direction: column; gap: 10px; text-align: center; }
+
+  /* Login card: menos padding en móvil */
+  .login-card { padding: 28px 20px; margin: 28px auto; }
+
+  /* Portal content: padding reducido */
+  .portal-content { padding: 20px 16px; }
+
+  /* Student chip: truncar si el texto es muy largo */
+  .student-chip {
+    max-width: 55vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+
+  /* Section topbar: apilar título + botón en móvil */
+  .section-topbar { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .section-topbar > button { width: 100%; justify-content: center; }
+
+  /* Student row: permitir wrap para evitar desborde */
+  .student-row { flex-wrap: wrap; padding: 12px 14px; gap: 10px; }
+
+  /* Submit row: apilar en móvil */
+  .submit-row { flex-direction: column; gap: 12px; align-items: stretch; padding: 14px 16px; }
+  .submit-row .btn-submit { width: 100%; justify-content: center; }
+  .answered-count { text-align: center; }
+
+  /* Cards: reducir padding interior en móvil */
+  .practice-card { padding: 16px; }
+  .question-card { padding: 16px; }
+  .form-card { padding: 20px 16px; }
+
+  /* Review header: envolver badges en pantallas pequeñas */
+  .review-header { flex-wrap: wrap; gap: 8px; }
+  .rh-left { flex: 1; min-width: 0; }
+  .rh-right { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+
+  /* Create practice meta: 1 columna en móvil */
+  .create-practice-meta { grid-template-columns: 1fr; }
+
+  /* YouTube iframe: altura adaptada en móvil */
+  .yt-embed-full iframe { height: 210px !important; }
+
+  /* Modal overlay: menos padding en móvil */
+  .modal-overlay { padding: 12px; }
 }
 
 /* ============================================
@@ -901,6 +954,36 @@ a { color: inherit; text-decoration: none; }
   .modal-card { max-width: 95%; margin: 0.5rem; }
   .modal-footer { flex-direction: column; }
   .modal-footer button { width: 100%; }
+
+  /* Teléfonos muy pequeños */
+  .hero-content h1 { font-size: 30px; }
+  .hero-badge { font-size: 11px; }
+  .btn-hero-primary, .btn-hero-outline { padding: 12px 18px; font-size: 14px; width: 100%; }
+  .hero-ctas { flex-direction: column; }
+  .pin-box { width: 48px; height: 58px; font-size: 24px; }
+  .pin-inputs { gap: 8px; }
+  .stat-n { font-size: 32px; }
+  .rh-left > div strong { font-size: 13px; }
+  .rh-sub { font-size: 11px; }
+  .score-badge, .pending-badge, .flag-badge { font-size: 11px; padding: 3px 8px; }
+  .sr-info strong { font-size: 14px; }
+  .sr-pin { font-size: 12px; }
+  .login-card { padding: 24px 16px; }
+}
+
+/* ============================================
+   TABLET (769px – 1024px)
+   ============================================ */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .hero-inner { gap: 32px; }
+  .about-inner { gap: 32px; }
+  .hero-content h1 { font-size: clamp(32px, 4vw, 50px); }
+  .feat-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  .portal-content { max-width: 100%; padding: 24px 20px; }
+  .nav-inner { padding: 14px 20px; }
+  .nav-links { gap: 14px; }
+  .tab-btn { padding: 8px 10px; font-size: 12px; }
+  .section-topbar h2 { font-size: 20px; }
 }
 
 /* ============================================
