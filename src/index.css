@@ -835,8 +835,9 @@ a { color: inherit; text-decoration: none; }
   .about-inner { grid-template-columns: 1fr; }
 
   /* Portal header: show mobile, hide desktop */
+  .portal-header { padding: 0 !important; }
   .ph-desktop { display: none !important; }
-  .ph-mobile  { display: block !important; }
+  .ph-mobile  { display: block !important; width: 100% !important; }
 
   /* Barra de tabs móvil: fondo blanco, indicador inferior, distribuida */
   .ph-mobile-tabs {
