@@ -762,17 +762,11 @@ a { color: inherit; text-decoration: none; }
 }
 
 .ph-mobile-tabs {
-  width: 100% !important;
-  border-radius: 0 !important;
-  padding: 4px 6px !important;
-  justify-content: space-around;
+  width: 100%;
+  display: flex;
 }
 
 .ph-mobile-tabs .tab-btn {
-  flex: 1;
-  justify-content: center;
-  font-size: 0;
-  padding: 7px 4px;
   position: relative;
 }
 
@@ -846,46 +840,52 @@ a { color: inherit; text-decoration: none; }
 
   /* Barra de tabs móvil: fondo blanco, indicador inferior, distribuida */
   .ph-mobile-tabs {
+    display: flex !important;
     background: white !important;
     border-top: 1px solid var(--border) !important;
+    border-bottom: none !important;
     padding: 0 !important;
     border-radius: 0 !important;
     gap: 0 !important;
-    justify-content: space-evenly !important;
+    justify-content: space-between !important;
+    width: 100% !important;
   }
 
-  /* Cada tab: solo ícono con touch target generoso */
-  .tab-btn {
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    padding: 10px 4px 8px;
-    border-bottom: 3px solid transparent;
-    border-radius: 0;
+  /* Cada tab: solo ícono, touch target generoso, distribuido */
+  .ph-mobile-tabs .tab-btn {
+    flex: 1 1 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    padding: 10px 0 8px !important;
+    border-bottom: 3px solid transparent !important;
+    border-radius: 0 !important;
     background: none !important;
     box-shadow: none !important;
-    font-size: 0;
-    min-height: 48px;
-    transition: border-color .15s, color .15s;
+    font-size: 0 !important;
+    min-height: 52px !important;
+    color: var(--muted) !important;
+    transition: border-color .15s, color .15s !important;
   }
 
-  .tab-btn.active {
+  .ph-mobile-tabs .tab-btn.active {
     background: none !important;
     box-shadow: none !important;
     border-bottom: 3px solid var(--coral) !important;
     color: var(--coral) !important;
   }
 
-  .tab-btn svg {
+  .ph-mobile-tabs .tab-btn svg {
     width: 22px !important;
     height: 22px !important;
+    flex-shrink: 0 !important;
   }
 
-  .tab-badge {
+  .ph-mobile-tabs .tab-badge {
     position: absolute;
-    top: 4px; right: 6px;
+    top: 4px; right: 4px;
     font-size: 9px;
     padding: 1px 4px;
     min-width: 14px;
