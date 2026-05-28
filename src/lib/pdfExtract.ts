@@ -7,8 +7,17 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 export async function extractTextFromUrl(url: string): Promise<string> {
   const resp   = await fetch(url)
   const buffer = await resp.arrayBuffer()
+  return extractTextFromBuffer(buffer)
+}
+
+export async function extractTextFromFile(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer()
+  return extractTextFromBuffer(buffer)
+}
+
+async function extractTextFromBuffer(buffer: ArrayBuffer): Promise<string> {
   const pdf    = await pdfjsLib.getDocument({ data: buffer }).promise
-  
+
   let fullText = ''
   
   for (let i = 1; i <= pdf.numPages; i++) {

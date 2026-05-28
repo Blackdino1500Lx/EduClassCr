@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { AppView } from '../App'
 import { db, auth } from '../lib/data'
 import type { Student, Practice, Submission, Question, Subject, Grade, Level, Lesson } from '../lib/data'
@@ -248,6 +248,8 @@ function StudentsTab({ students, reload }: { students: Student[], reload: () => 
 function PracticesTab({ practices, students, lessons, reload }: { practices: Practice[], students: Student[], lessons: Lesson[], reload: () => void }) {
   const [showForm, setShowForm]           = useState(false)
   const [createFromLesson, setCreateFromLesson] = useState<Lesson | null>(null)
+  const [uploadFile, setUploadFile]       = useState<File | null>(null)
+  const pdfInputRef                       = useRef<HTMLInputElement>(null)
   const [saving, setSaving]               = useState(false)
   const [err, setErr]                     = useState('')
   const [form, setForm]                   = useState({
@@ -290,7 +292,21 @@ function PracticesTab({ practices, students, lessons, reload }: { practices: Pra
     <div>
       <div className="section-topbar">
         <h2>Prácticas ({practices.length})</h2>
-        <div style={{display:'flex',gap:8}}>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          <input
+            ref={pdfInputRef}
+            type="file"
+            accept=".pdf"
+            style={{display:'none'}}
+            onChange={e => {
+              const f = e.target.files?.[0]
+              if (f) setUploadFile(f)
+              e.target.value = ''
+            }}
+          />
+          <button className="btn-outline" onClick={() => pdfInputRef.current?.click()}>
+            <Plus size={15}/> Subir PDF y crear
+          </button>
           <select
             style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:13,maxWidth:220}}
             value=""
@@ -299,7 +315,7 @@ function PracticesTab({ practices, students, lessons, reload }: { practices: Pra
               if (lesson) setCreateFromLesson(lesson)
             }}
           >
-            <option value="">📄 Crear desde PDF…</option>
+            <option value="">📄 Crear desde la Biblioteca…</option>
             {lessons.filter(l => l.fileUrl || l.pageImages?.length).map(l => (
               <option key={l.id} value={l.id}>{l.title}</option>
             ))}
@@ -314,6 +330,16 @@ function PracticesTab({ practices, students, lessons, reload }: { practices: Pra
           students={students}
           onClose={() => setCreateFromLesson(null)}
           onSaved={() => { setCreateFromLesson(null); reload() }}
+        />
+      )}
+
+      {uploadFile && (
+        <CreatePracticeModal
+          file={uploadFile}
+          initialSubject={form.subject}
+          students={students}
+          onClose={() => setUploadFile(null)}
+          onSaved={() => { setUploadFile(null); reload() }}
         />
       )}
 

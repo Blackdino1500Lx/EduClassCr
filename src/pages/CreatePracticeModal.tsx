@@ -1,64 +1,82 @@
-import { useState } from 'react'
-import type { Lesson, Student, Question } from '../lib/data'
+import { useState, useEffect } from 'react'
+import type { Lesson, Student, Question, Subject } from '../lib/data'
 import { db, qImages } from '../lib/data'
-import { extractTextFromUrl } from '../lib/pdfExtract'
+import { extractTextFromUrl, extractTextFromFile } from '../lib/pdfExtract'
 import { parseQuestionsFromText } from '../lib/pdfParse'
 import { X, Loader2, AlertTriangle, Check, Trash2, Plus, Edit3, Image } from 'lucide-react'
 
+const SUBJECTS: Subject[] = ['Matemáticas', 'Español', 'Ciencias', 'Estudios Sociales', 'Inglés']
+
 interface Props {
-  lesson: Lesson; students: Student[]
+  lesson?: Lesson          // crear desde una lección ya subida
+  file?: File              // crear desde un PDF recién subido
+  initialSubject?: Subject // materia por defecto cuando se sube un PDF nuevo
+  students: Student[]
   onClose: () => void; onSaved: () => void
 }
 type Step = 'extracting' | 'review' | 'saving' | 'done' | 'error'
 const uid = () => Math.random().toString(36).slice(2, 10)
 
-export default function CreatePracticeModal({ lesson, students, onClose, onSaved }: Props) {
+export default function CreatePracticeModal({ lesson, file, initialSubject, students, onClose, onSaved }: Props) {
+  const sourceName = lesson?.title ?? file?.name ?? 'PDF'
   const [step, setStep]               = useState<Step>('extracting')
   const [progress, setProgress]       = useState('')
   const [questions, setQuestions]     = useState<Question[]>([])
   const [editingQ, setEditingQ]       = useState<string | null>(null)
   const [error, setError]             = useState('')
-  const [title, setTitle]             = useState(`Práctica · ${lesson.title}`)
-  const [description, setDescription] = useState(`Basada en: ${lesson.fileName ?? lesson.title}`)
+  const [subject, setSubject]         = useState<Subject>(lesson?.subject ?? initialSubject ?? 'Matemáticas')
+  const [title, setTitle]             = useState(
+    lesson ? `Práctica · ${lesson.title}` : `Práctica · ${(file?.name ?? '').replace(/\.pdf$/i, '')}`
+  )
+  const [description, setDescription] = useState(
+    lesson ? `Basada en: ${lesson.fileName ?? lesson.title}` : `Basada en: ${file?.name ?? ''}`
+  )
   const [dueDate, setDueDate]         = useState('')
   const [assignedTo, setAssignedTo]   = useState<string[]>([])
   const [uploadingImg, setUploadingImg] = useState<string | null>(null)
 
-  useState(() => { startProcess() })
+  // Ejecutar la extracción una sola vez al montar el modal.
+  useEffect(() => { startProcess() }, [])
 
   async function startProcess() {
     setStep('extracting'); setError('')
     try {
-      // Step 1: Extract text from PDF
+      // Step 1: Extract text from PDF (desde lección subida o archivo nuevo)
       setProgress('Extrayendo texto del PDF...')
       let pdfText = ''
-      if (lesson.fileUrl) {
-       pdfText = await extractTextFromUrl(lesson.fileUrl)
+      if (file) {
+        pdfText = await extractTextFromFile(file)
+      } else if (lesson?.fileUrl) {
+        pdfText = await extractTextFromUrl(lesson.fileUrl)
+      } else {
+        throw new Error('No hay PDF para procesar.')
       }
       if (!pdfText || pdfText.trim().length < 100) {
-        throw new Error('No se pudo extraer texto del PDF.')
+        throw new Error('No se pudo extraer texto del PDF. ¿Es un PDF escaneado (solo imágenes)? Probá crear la práctica de forma manual.')
       }
 
       // Step 2: Parse questions with regex (ZERO AI cost, instant)
       setProgress('Parseando preguntas...')
       const parsed = parseQuestionsFromText(pdfText)
       if (parsed.length === 0) {
-        throw new Error('No se encontraron preguntas en el PDF.')
+        throw new Error('No se encontraron preguntas en el PDF. Podés agregarlas manualmente con el botón "Agregar".')
       }
 
-      // Step 3: Load matching images from question_images table
-      setProgress('Buscando imágenes...')
-      const examKey = lesson.examKey ?? qImages.buildExamKey(
-        (lesson.fileName ?? lesson.title).replace(/\.pdf$/i, '')
-      )
+      // Step 3: Load matching images from question_images table (solo si viene de una lección)
       let imgs: Awaited<ReturnType<typeof qImages.forExam>> = []
-      try {
-        imgs = await qImages.forExam(examKey)
-      } catch (_e) {
+      if (lesson) {
+        setProgress('Buscando imágenes...')
+        const examKey = lesson.examKey ?? qImages.buildExamKey(
+          (lesson.fileName ?? lesson.title).replace(/\.pdf$/i, '')
+        )
+        try {
+          imgs = await qImages.forExam(examKey)
+        } catch (_e) {
+        }
       }
 
       // Step 4: Build Question objects with auto-attached images
-      const isMath = lesson.subject === 'Matemáticas'
+      const isMath = subject === 'Matemáticas'
       const qs: Question[] = parsed.map(p => {
         const img = qImages.findForQuestion(imgs, p.num)
         return {
@@ -85,7 +103,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
   const removeQ = (id: string) =>
     setQuestions(prev => prev.filter(q => q.id !== id))
   const addQ = () => {
-    const isMath = lesson.subject === 'Matemáticas'
+    const isMath = subject === 'Matemáticas'
     setQuestions(prev => [...prev, {
       id: uid(), text: '', points: 5,
       type: isMath ? 'open' : 'multiple',
@@ -99,7 +117,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
     try {
       const { url } = await db.storage.uploadFile(file)
       updateQ(qId, { imageUrl: url })
-    } catch (_e) { alert('Error subiendo imagen') }
+    } catch (e: any) { alert('Error subiendo imagen: ' + (e?.message ?? e)) }
     finally { setUploadingImg(null) }
   }
 
@@ -110,9 +128,9 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
     setStep('saving')
     try {
       await db.practices.add({
-        title, subject: lesson.subject, description, questions,
+        title, subject, description, questions,
         assignedTo, dueDate: dueDate || undefined,
-        isActive: true, lessonId: lesson.id,
+        isActive: true, lessonId: lesson?.id,
       })
       setStep('done')
       setTimeout(() => { onSaved(); onClose() }, 1200)
@@ -130,7 +148,7 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
         <div className="modal-header">
           <div>
             <h3>Crear práctica</h3>
-            <p className="modal-subtitle" style={{padding:0,marginTop:4}}>{lesson.title}</p>
+            <p className="modal-subtitle" style={{padding:0,marginTop:4}}>{sourceName}</p>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={18}/></button>
         </div>
@@ -173,11 +191,16 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                 <div className="field full"><label>Título</label>
                   <input value={title} onChange={e => setTitle(e.target.value)}/>
                 </div>
-                <div className="field full"><label>Descripción</label>
-                  <textarea rows={2} value={description} onChange={e => setDescription(e.target.value)}/>
+                <div className="field"><label>Materia</label>
+                  <select value={subject} onChange={e => setSubject(e.target.value as Subject)}>
+                    {SUBJECTS.map(s => <option key={s}>{s}</option>)}
+                  </select>
                 </div>
                 <div className="field"><label>Fecha límite (opcional)</label>
                   <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}/>
+                </div>
+                <div className="field full"><label>Descripción</label>
+                  <textarea rows={2} value={description} onChange={e => setDescription(e.target.value)}/>
                 </div>
               </div>
 
@@ -241,6 +264,13 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                       </div>
                     )}
 
+                    {/* Sandbox toggle — siempre visible */}
+                    <label className="sandbox-toggle-label" style={{marginTop:8}}>
+                      <input type="checkbox" checked={q.hasSandbox ?? false}
+                        onChange={e => updateQ(q.id, { hasSandbox: e.target.checked })}/>
+                      <span>🎨 Habilitar sandbox (texto + dibujo libre)</span>
+                    </label>
+
                     {editingQ === q.id ? (
                       <>
                         <textarea rows={3} className="q-input" value={q.text}
@@ -259,11 +289,6 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
                             <p className="hint-text">Círculo = respuesta correcta</p>
                           </div>
                         )}
-                        <label className="sandbox-toggle-label" style={{marginTop:8}}>
-                          <input type="checkbox" checked={q.hasSandbox ?? false}
-                            onChange={e => updateQ(q.id, { hasSandbox: e.target.checked })}/>
-                          <span>🎨 Habilitar sandbox (texto + dibujo libre)</span>
-                        </label>
                         <button className="btn-outline sm" style={{marginTop:8}} onClick={() => setEditingQ(null)}>
                           <Check size={12}/> Listo
                         </button>
