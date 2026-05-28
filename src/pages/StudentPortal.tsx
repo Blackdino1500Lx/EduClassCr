@@ -306,6 +306,11 @@ export default function StudentPortal({ setView }: Props) {
                   <span className="q-pts">{q.points} pt{q.points!==1?'s':''}</span>
                 </div>
                 <p className="q-text">{q.text}</p>
+                {q.imageUrl && (
+                  <div className="q-image-preview">
+                    <img src={q.imageUrl} alt="Figura" style={{maxWidth:'100%',borderRadius:8,margin:'8px 0'}}/>
+                  </div>
+                )}
                 {q.type==='open'
                   ? q.hasSandbox
                     ? <MathSandbox

@@ -34,8 +34,6 @@ export default function CreatePracticeModal({ lesson, students, onClose, onSaved
       let pdfText = ''
       if (lesson.fileUrl) {
        pdfText = await extractTextFromUrl(lesson.fileUrl)
-console.log('Texto extraído:', pdfText.length, 'chars')
-console.log('Primeras líneas:', pdfText.slice(0, 500))
       }
       if (!pdfText || pdfText.trim().length < 100) {
         throw new Error('No se pudo extraer texto del PDF.')
@@ -56,9 +54,7 @@ console.log('Primeras líneas:', pdfText.slice(0, 500))
       let imgs: Awaited<ReturnType<typeof qImages.forExam>> = []
       try {
         imgs = await qImages.forExam(examKey)
-        console.log(`Found ${imgs.length} images for examKey: ${examKey}`)
       } catch (_e) {
-        console.warn('No images found')
       }
 
       // Step 4: Build Question objects with auto-attached images

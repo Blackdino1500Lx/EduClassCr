@@ -8,3 +8,9 @@
 
 [functions."generate-practice"]
   timeout = 120
+
+# SPA redirect — todas las rutas van al index.html
+[[redirects]]
+  from = "/*"
+  to   = "/index.html"
+  status = 200
