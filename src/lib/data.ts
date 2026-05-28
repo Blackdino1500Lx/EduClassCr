@@ -150,10 +150,12 @@ export const db = {
 
   storage: {
     async uploadFile(file: File): Promise<{ url: string; name: string }> {
+      const { data: { user } } = await supabase.auth.getUser()
+      const uid  = user?.id ?? 'anon'
       const ext  = file.name.split('.').pop()
-      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
       const { error } = await supabase.storage.from('materials').upload(path, file)
-      if (error) throw error
+      if (error) throw new Error(`Storage error: ${error.message}`)
       const { data } = supabase.storage.from('materials').getPublicUrl(path)
       return { url: data.publicUrl, name: file.name }
     },

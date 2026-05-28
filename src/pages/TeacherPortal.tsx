@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import LessonsTab from './LessonsTab'
 import LibraryTab from './LibraryTab'
+import CreatePracticeModal from './CreatePracticeModal'
 
 interface Props { setView: (v: AppView) => void }
 type Tab = 'students' | 'library' | 'lessons' | 'practices' | 'reviews'
@@ -245,10 +246,11 @@ function StudentsTab({ students, reload }: { students: Student[], reload: () => 
 // PRACTICES TAB (ahora con selector de lección)
 // ══════════════════════════════════════════════════════════════════
 function PracticesTab({ practices, students, lessons, reload }: { practices: Practice[], students: Student[], lessons: Lesson[], reload: () => void }) {
-  const [showForm, setShowForm] = useState(false)
-  const [saving, setSaving]     = useState(false)
-  const [err, setErr]           = useState('')
-  const [form, setForm]         = useState({
+  const [showForm, setShowForm]           = useState(false)
+  const [createFromLesson, setCreateFromLesson] = useState<Lesson | null>(null)
+  const [saving, setSaving]               = useState(false)
+  const [err, setErr]                     = useState('')
+  const [form, setForm]                   = useState({
     title: '', subject: SUBJECTS[0] as Subject, description: '',
     dueDate: '', assignedTo: [] as string[], questions: [] as Question[],
     lessonId: '' as string,
@@ -288,8 +290,32 @@ function PracticesTab({ practices, students, lessons, reload }: { practices: Pra
     <div>
       <div className="section-topbar">
         <h2>Prácticas ({practices.length})</h2>
-        <button className="btn-primary" onClick={() => setShowForm(v => !v)}><Plus size={15}/> Nueva práctica</button>
+        <div style={{display:'flex',gap:8}}>
+          <select
+            style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:13,maxWidth:220}}
+            value=""
+            onChange={e => {
+              const lesson = lessons.find(l => l.id === e.target.value)
+              if (lesson) setCreateFromLesson(lesson)
+            }}
+          >
+            <option value="">📄 Crear desde PDF…</option>
+            {lessons.filter(l => l.fileUrl || l.pageImages?.length).map(l => (
+              <option key={l.id} value={l.id}>{l.title}</option>
+            ))}
+          </select>
+          <button className="btn-primary" onClick={() => setShowForm(v => !v)}><Plus size={15}/> Nueva práctica</button>
+        </div>
       </div>
+
+      {createFromLesson && (
+        <CreatePracticeModal
+          lesson={createFromLesson}
+          students={students}
+          onClose={() => setCreateFromLesson(null)}
+          onSaved={() => { setCreateFromLesson(null); reload() }}
+        />
+      )}
 
       {showForm && (
         <div className="form-card">
