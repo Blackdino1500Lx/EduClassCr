@@ -1,11 +1,16 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import type { AppView } from '../App'
 import type { Student, Practice, Lesson } from '../lib/data'
 import { db } from '../lib/data'
 import { ArrowLeft, BookOpen, Lock, AlertTriangle, CheckCircle, Clock, Send, ChevronRight, Loader2, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 import MathSandbox from '../components/MathSandbox'
 
-interface Props { setView: (v: AppView) => void }
+interface Props {
+  setView?: (v: AppView) => void
+  student?: Student
+  teacher?: { id: string; [key: string]: any }
+  onLogout?: () => void
+}
 type Screen = 'login' | 'home' | 'lesson' | 'practice'
 
 function ytEmbed(url: string): string | null {
@@ -46,10 +51,10 @@ function SecureTextarea({ value, onChange, isMath, placeholder, flagsRef }: {
   )
 }
 
-export default function StudentPortal({ setView }: Props) {
-  const [screen, setScreen]             = useState<Screen>('login')
+export default function StudentPortal({ setView, student: studentProp, onLogout }: Props) {
+  const [screen, setScreen]             = useState<Screen>(studentProp ? 'home' : 'login')
   const [pin, setPin]                   = useState('')
-  const [student, setStudent]           = useState<Student | null>(null)
+  const [student, setStudent]           = useState<Student | null>(studentProp ?? null)
   const [practices, setPractices]       = useState<Practice[]>([])
   const [lessons, setLessons]           = useState<Lesson[]>([])
   const [activePractice, setActive]     = useState<Practice | null>(null)
@@ -63,6 +68,17 @@ export default function StudentPortal({ setView }: Props) {
   const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set())
   const [lessonExpanded, setLessonExpanded] = useState(true)
   const flagsRef = useRef<string[]>([])
+
+  // If pre-authenticated via StudentLogin, load data on mount
+  useEffect(() => {
+    if (studentProp) {
+      db.practices.forStudent(studentProp.id).then(setPractices)
+      db.lessons.forStudent(studentProp.id).then(setLessons)
+      db.submissions.getAll().then(subs => {
+        setSubmittedIds(new Set(subs.filter(s => s.studentId === studentProp.id).map(s => s.practiceId)))
+      })
+    }
+  }, [studentProp?.id])
 
   const handleLogin = async () => {
     if (pin.length !== 4) { setLoginErr('El PIN debe ser de 4 dígitos'); return }
@@ -124,7 +140,7 @@ export default function StudentPortal({ setView }: Props) {
   if (screen === 'login') return (
     <div className="portal-root">
       <div className="portal-header">
-        <button className="back-btn" onClick={() => setView('landing')}><ArrowLeft size={16}/> Volver al inicio</button>
+        <button className="back-btn" onClick={() => onLogout ? onLogout() : setView?.('landing')}><ArrowLeft size={16}/> Volver al inicio</button>
       </div>
       <div className="login-card">
         <div className="login-icon"><BookOpen size={32}/></div>
@@ -149,7 +165,7 @@ export default function StudentPortal({ setView }: Props) {
   if (screen === 'home' && student) return (
     <div className="portal-root">
       <div className="portal-header">
-        <button className="back-btn" onClick={() => setView('landing')}><ArrowLeft size={16}/> Inicio</button>
+        <button className="back-btn" onClick={() => onLogout ? onLogout() : setView?.('landing')}><ArrowLeft size={16}/> Inicio</button>
         <div className="student-chip">{student.firstName} {student.lastName} · {student.grade} · {student.level}</div>
       </div>
       <div className="portal-content">
