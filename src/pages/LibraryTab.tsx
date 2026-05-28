@@ -247,7 +247,8 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
   }
 
   const confirmSinglePdf = async () => {
-    if (!pendingFile || !pendingTitle.trim()) return
+    if (!pendingFile) { alert('No hay archivo seleccionado'); return }
+    if (!pendingTitle.trim()) { alert('El título es requerido'); return }
 
     // Capture refs before closing modal
     const file       = pendingFile
@@ -271,12 +272,16 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
     setUploadDone(false)
     setTimeout(() => progressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
 
-    // Subir PDF
-    await runUploadFiles([{ job, file }], examKey)
+    try {
+      // Subir PDF
+      await runUploadFiles([{ job, file }], examKey)
 
-    // Subir imágenes si hay ZIP
-    if (imagesZip) {
-      await processImagesZip(imagesZip, examKey)
+      // Subir imágenes si hay ZIP
+      if (imagesZip) {
+        await processImagesZip(imagesZip, examKey)
+      }
+    } catch (err: any) {
+      alert('Error inesperado:\n' + (err?.message ?? String(err)))
     }
   }
 

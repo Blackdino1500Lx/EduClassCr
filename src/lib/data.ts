@@ -88,9 +88,8 @@ export const db = {
       if (error) throw error; return (data ?? []).map(toLesson)
     },
     async add(l: Omit<Lesson, 'id'|'createdAt'>): Promise<Lesson> {
-      const teacher_id = await getUid()
       const { data, error } = await supabase.from('lessons')
-        .insert({ teacher_id, title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, exam_key: l.examKey ?? null, youtube_url: l.youtubeUrl ?? null, page_images: l.pageImages ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
+        .insert({ title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, exam_key: l.examKey ?? null, youtube_url: l.youtubeUrl ?? null, page_images: l.pageImages ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
         .select().single()
       if (error) throw error; return toLesson(data)
     },
