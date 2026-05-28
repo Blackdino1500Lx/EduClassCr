@@ -64,9 +64,8 @@ export const db = {
       if (error) throw error; return (data ?? []).map(toStudent)
     },
     async add(s: Omit<Student, 'id'|'createdAt'>): Promise<Student> {
-      const teacher_id = await getUid()
       const { data, error } = await supabase.from('students')
-        .insert({ teacher_id, first_name: s.firstName, last_name: s.lastName, grade: s.grade, level: s.level, pin: s.pin })
+        .insert({ first_name: s.firstName, last_name: s.lastName, grade: s.grade, level: s.level, pin: s.pin })
         .select().single()
       if (error) throw error; return toStudent(data)
     },
@@ -113,9 +112,8 @@ export const db = {
       if (error) throw error; return (data ?? []).map(toPractice)
     },
     async add(p: Omit<Practice, 'id'|'createdAt'>): Promise<Practice> {
-      const teacher_id = await getUid()
       const { data, error } = await supabase.from('practices')
-        .insert({ teacher_id, title: p.title, subject: p.subject, description: p.description, questions: p.questions, assigned_to: p.assignedTo, due_date: p.dueDate || null, is_active: p.isActive, lesson_id: p.lessonId || null })
+        .insert({ title: p.title, subject: p.subject, description: p.description, questions: p.questions, assigned_to: p.assignedTo, due_date: p.dueDate || null, is_active: p.isActive, lesson_id: p.lessonId || null })
         .select().single()
       if (error) throw error; return toPractice(data)
     },
