@@ -51,6 +51,12 @@ const toLesson   = (r: any): Lesson   => ({ id: r.id, title: r.title, subject: r
 const toSub      = (r: any): Submission => ({ id: r.id, practiceId: r.practice_id, studentId: r.student_id, answers: r.answers ?? [], submittedAt: r.submitted_at, score: r.score ?? undefined, reviewed: r.reviewed, teacherNote: r.teacher_note ?? undefined, antiCheatFlags: r.anti_cheat_flags ?? [] })
 
 // ── DB ───────────────────────────────────────────────────────────
+async function getUid(): Promise<string> {
+  const { data } = await supabase.auth.getUser()
+  if (!data.user) throw new Error('No hay sesión activa. Iniciá sesión primero.')
+  return data.user.id
+}
+
 export const db = {
   students: {
     async getAll(): Promise<Student[]> {
@@ -58,8 +64,9 @@ export const db = {
       if (error) throw error; return (data ?? []).map(toStudent)
     },
     async add(s: Omit<Student, 'id'|'createdAt'>): Promise<Student> {
+      const teacher_id = await getUid()
       const { data, error } = await supabase.from('students')
-        .insert({ first_name: s.firstName, last_name: s.lastName, grade: s.grade, level: s.level, pin: s.pin })
+        .insert({ teacher_id, first_name: s.firstName, last_name: s.lastName, grade: s.grade, level: s.level, pin: s.pin })
         .select().single()
       if (error) throw error; return toStudent(data)
     },
@@ -81,8 +88,9 @@ export const db = {
       if (error) throw error; return (data ?? []).map(toLesson)
     },
     async add(l: Omit<Lesson, 'id'|'createdAt'>): Promise<Lesson> {
+      const teacher_id = await getUid()
       const { data, error } = await supabase.from('lessons')
-        .insert({ title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, exam_key: l.examKey ?? null, youtube_url: l.youtubeUrl ?? null, page_images: l.pageImages ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
+        .insert({ teacher_id, title: l.title, subject: l.subject, content: l.content ?? null, file_url: l.fileUrl ?? null, file_name: l.fileName ?? null, exam_key: l.examKey ?? null, youtube_url: l.youtubeUrl ?? null, page_images: l.pageImages ?? null, assigned_to: l.assignedTo, is_active: l.isActive })
         .select().single()
       if (error) throw error; return toLesson(data)
     },
@@ -106,8 +114,9 @@ export const db = {
       if (error) throw error; return (data ?? []).map(toPractice)
     },
     async add(p: Omit<Practice, 'id'|'createdAt'>): Promise<Practice> {
+      const teacher_id = await getUid()
       const { data, error } = await supabase.from('practices')
-        .insert({ title: p.title, subject: p.subject, description: p.description, questions: p.questions, assigned_to: p.assignedTo, due_date: p.dueDate || null, is_active: p.isActive, lesson_id: p.lessonId || null })
+        .insert({ teacher_id, title: p.title, subject: p.subject, description: p.description, questions: p.questions, assigned_to: p.assignedTo, due_date: p.dueDate || null, is_active: p.isActive, lesson_id: p.lessonId || null })
         .select().single()
       if (error) throw error; return toPractice(data)
     },

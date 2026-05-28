@@ -245,32 +245,35 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
 
   const confirmSinglePdf = async () => {
     if (!pendingFile || !pendingTitle.trim()) return
-    
-    const examKey = qImages.buildExamKey(pendingTitle.replace(/[^a-zA-Z0-9]/g, '_'))
-    
+
+    // Capture refs before closing modal
+    const file       = pendingFile
+    const imagesZip  = pendingImagesZip
+    const examKey    = qImages.buildExamKey(pendingTitle.replace(/[^a-zA-Z0-9]/g, '_'))
+
     const job: UploadJob = {
-      name: pendingFile.name, 
-      path: pendingFile.name,
-      grade: pendingGrade, 
+      name: file.name,
+      path: file.name,
+      grade: pendingGrade,
       subject: pendingSubject,
       status: 'pending',
       customTitle: pendingTitle.trim(),
       customDesc:  pendingDesc.trim(),
     }
-    
-    setJobs([job]); 
-    setUploadDone(false); 
-    
-    // Subir PDF
-    await runUploadFiles([{ job, file: pendingFile }], examKey)
-    
-    // Subir imágenes si hay ZIP
-    if (pendingImagesZip) {
-      await processImagesZip(pendingImagesZip, examKey)
-    }
-    
+
+    // Close modal first so the upload progress card is visible
     setPendingFile(null)
     setPendingImagesZip(null)
+    setJobs([job])
+    setUploadDone(false)
+
+    // Subir PDF
+    await runUploadFiles([{ job, file }], examKey)
+
+    // Subir imágenes si hay ZIP
+    if (imagesZip) {
+      await processImagesZip(imagesZip, examKey)
+    }
   }
 
   // ── Process ZIP ────────────────────────────────────────────────
