@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import JSZip from 'jszip'
 import type { Lesson, Student, Subject, Grade } from '../lib/data'
 import { db, qImages } from '../lib/data'
@@ -187,6 +187,9 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
   const zipRef = useRef<HTMLInputElement>(null)
   const pdfRef = useRef<HTMLInputElement>(null)
   const imagesZipRef = useRef<HTMLInputElement>(null)
+  const progressRef = useRef<HTMLDivElement>(null)
+  const lessonsRef = useRef(lessons)
+  useEffect(() => { lessonsRef.current = lessons }, [lessons])
 
   // ── Process Images ZIP ─────────────────────────────────────────
   const processImagesZip = async (zipFile: File, examKey: string) => {
@@ -266,6 +269,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
     setPendingImagesZip(null)
     setJobs([job])
     setUploadDone(false)
+    setTimeout(() => progressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
 
     // Subir PDF
     await runUploadFiles([{ job, file }], examKey)
@@ -348,7 +352,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
 
     for (let i = 0; i < pairs.length; i++) {
       const { job, file } = pairs[i]
-      const exists = lessons.some(l => l.fileName === job.name)
+      const exists = lessonsRef.current.some(l => l.fileName === job.name)
       if (exists) { updated[i] = { ...job, status: 'skipped' }; setJobs([...updated]); continue }
 
       updated[i] = { ...job, status: 'uploading' }; setJobs([...updated])
@@ -367,7 +371,9 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
         })
         updated[i] = { ...job, status: 'done' }
       } catch (err: any) {
-        updated[i] = { ...job, status: 'error', error: err.message }
+        const msg = err?.message ?? String(err)
+        updated[i] = { ...job, status: 'error', error: msg }
+        alert(`Error al subir "${job.name}":\n${msg}`)
       }
       setJobs([...updated])
     }
@@ -398,10 +404,12 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
     return true
   })
 
-  // Agrupar por materia
+  // Agrupar por materia, más reciente primero dentro de cada grupo
   const lessonsBySubject = SUBJECTS.map(subject => ({
     subject,
-    lessons: filtered.filter(l => l.subject === subject)
+    lessons: filtered
+      .filter(l => l.subject === subject)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   })).filter(group => group.lessons.length > 0)
 
   const doneCount    = jobs.filter(j => j.status === 'done').length
@@ -531,7 +539,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
 
       {/* Upload progress */}
       {jobs.length > 0 && (
-        <div className="upload-progress-card">
+        <div className="upload-progress-card" ref={progressRef}>
           <div className="upc-header">
             <span className="upc-title">
               {uploading ? '⏳ Subiendo archivos...' : uploadDone ? '✅ Carga completada' : 'Archivos detectados'}
