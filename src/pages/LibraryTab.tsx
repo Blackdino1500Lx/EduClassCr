@@ -5,7 +5,7 @@ import { db, qImages } from '../lib/data'
 import CreatePracticeModal from './CreatePracticeModal'
 import {
   Upload, FileText, Search, Eye, EyeOff, Users, X, AlertTriangle,
-  Loader2, CheckCircle, FolderOpen, Filter, Sparkles, Image as ImageIcon
+  Loader2, CheckCircle, FolderOpen, Filter, Sparkles, Image as ImageIcon, Trash2
 } from 'lucide-react'
 
 interface Props { lessons: Lesson[]; students: Student[]; reload: () => void }
@@ -111,13 +111,14 @@ function AssignModal({ lesson, students, onClose, onSave }: {
 }
 
 // ── Componente para agrupar por materia ─────────────────────────
-function SubjectSection({ subject, lessons, students, onAssign, onToggleActive, onCreatePractice }: {
+function SubjectSection({ subject, lessons, students, onAssign, onToggleActive, onCreatePractice, onDelete }: {
   subject: Subject
   lessons: Lesson[]
   students: Student[]
   onAssign: (lesson: Lesson) => void
   onToggleActive: (lesson: Lesson) => void
   onCreatePractice: (lesson: Lesson) => void
+  onDelete: (lesson: Lesson) => void
 }) {
   if (lessons.length === 0) return null
   
@@ -160,6 +161,9 @@ function SubjectSection({ subject, lessons, students, onAssign, onToggleActive, 
                   <FileText size={13}/> Ver PDF
                 </a>
               )}
+              <button className="btn-outline sm btn-danger-outline" onClick={() => onDelete(l)}>
+                <Trash2 size={13}/> Borrar
+              </button>
             </div>
           </div>
         ))}
@@ -274,16 +278,19 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
 
     try {
       // Subir PDF
-      const okPdf = await runUploadFiles([{ job, file }], examKey)
+      const res = await runUploadFiles([{ job, file }], examKey)
 
       // Subir imágenes si hay ZIP
-      if (imagesZip) {
+      if (imagesZip && res.done > 0) {
         await processImagesZip(imagesZip, examKey)
       }
 
-      if (okPdf) {
+      if (res.done > 0) {
         alert(`✅ "${job.customTitle ?? job.name}" se guardó en la Biblioteca.${imagesZip ? '\nImágenes procesadas.' : ''}`)
+      } else if (res.skipped > 0) {
+        alert(`⚠️ Ya existe un material con el archivo "${job.name}".\n\nNo se subió de nuevo porque ya está en tu Biblioteca. Si querés volver a subirlo, primero cambiá el nombre del archivo PDF (por ejemplo "${job.name.replace(/\.pdf$/i, '')}_v2.pdf").`)
       }
+      // si res.error > 0 ya se mostró el alert de error dentro de runUploadFiles
     } catch (err: any) {
       alert('Error inesperado:\n' + (err?.message ?? String(err)))
     }
@@ -355,15 +362,15 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
     reload()
   }
 
-  const runUploadFiles = async (pairs: { job: UploadJob; file: File }[], examKey: string): Promise<boolean> => {
+  const runUploadFiles = async (pairs: { job: UploadJob; file: File }[], examKey: string): Promise<{ done: number; skipped: number; error: number }> => {
     setUploading(true)
     const updated = pairs.map(p => p.job)
-    let allOk = true
+    const result = { done: 0, skipped: 0, error: 0 }
 
     for (let i = 0; i < pairs.length; i++) {
       const { job, file } = pairs[i]
       const exists = lessonsRef.current.some(l => l.fileName === job.name)
-      if (exists) { updated[i] = { ...job, status: 'skipped' }; setJobs([...updated]); continue }
+      if (exists) { updated[i] = { ...job, status: 'skipped' }; setJobs([...updated]); result.skipped++; continue }
 
       updated[i] = { ...job, status: 'uploading' }; setJobs([...updated])
       try {
@@ -380,10 +387,11 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
           isActive:   false,
         })
         updated[i] = { ...job, status: 'done' }
+        result.done++
       } catch (err: any) {
         const msg = err?.message ?? String(err)
         updated[i] = { ...job, status: 'error', error: msg }
-        allOk = false
+        result.error++
         alert(`Error al subir "${job.name}":\n${msg}`)
       }
       setJobs([...updated])
@@ -391,12 +399,22 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
 
     setUploading(false); setUploadDone(true)
     reload()
-    return allOk
+    return result
   }
 
   // ── Toggle active + assign ─────────────────────────────────────
   const toggleActive = async (l: Lesson) => {
     await db.lessons.update({ ...l, isActive: !l.isActive }); reload()
+  }
+
+  const deleteLesson = async (l: Lesson) => {
+    if (!window.confirm(`¿Borrar "${l.title}" de la Biblioteca?\n\nEsta acción no se puede deshacer.`)) return
+    try {
+      await db.lessons.delete(l.id)
+      reload()
+    } catch (err: any) {
+      alert('Error al borrar:\n' + (err?.message ?? String(err)))
+    }
   }
 
   const saveAssign = async (ids: string[]) => {
@@ -630,6 +648,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
                 onAssign={setAssignTarget}
                 onToggleActive={toggleActive}
                 onCreatePractice={setCreateTarget}
+                onDelete={deleteLesson}
               />
             ))}
           </div>
