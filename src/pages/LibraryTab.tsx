@@ -274,11 +274,15 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
 
     try {
       // Subir PDF
-      await runUploadFiles([{ job, file }], examKey)
+      const okPdf = await runUploadFiles([{ job, file }], examKey)
 
       // Subir imágenes si hay ZIP
       if (imagesZip) {
         await processImagesZip(imagesZip, examKey)
+      }
+
+      if (okPdf) {
+        alert(`✅ "${job.customTitle ?? job.name}" se guardó en la Biblioteca.${imagesZip ? '\nImágenes procesadas.' : ''}`)
       }
     } catch (err: any) {
       alert('Error inesperado:\n' + (err?.message ?? String(err)))
@@ -351,9 +355,10 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
     reload()
   }
 
-  const runUploadFiles = async (pairs: { job: UploadJob; file: File }[], examKey: string) => {
+  const runUploadFiles = async (pairs: { job: UploadJob; file: File }[], examKey: string): Promise<boolean> => {
     setUploading(true)
     const updated = pairs.map(p => p.job)
+    let allOk = true
 
     for (let i = 0; i < pairs.length; i++) {
       const { job, file } = pairs[i]
@@ -378,6 +383,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
       } catch (err: any) {
         const msg = err?.message ?? String(err)
         updated[i] = { ...job, status: 'error', error: msg }
+        allOk = false
         alert(`Error al subir "${job.name}":\n${msg}`)
       }
       setJobs([...updated])
@@ -385,6 +391,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
 
     setUploading(false); setUploadDone(true)
     reload()
+    return allOk
   }
 
   // ── Toggle active + assign ─────────────────────────────────────
