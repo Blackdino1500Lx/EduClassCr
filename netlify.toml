@@ -1,16 +1,21 @@
 [build]
   command = "pnpm run build"
   publish = "dist"
-
+ 
+[build.environment]
+  # Vite 8 requiere Node >= 20.19 o >= 22.12
+  NODE_VERSION = "22"
+ 
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-
+ 
 [functions."generate-practice"]
   timeout = 120
-
+ 
 # SPA redirect — todas las rutas van al index.html
 [[redirects]]
   from = "/*"
   to   = "/index.html"
   status = 200
+ 
