@@ -31,6 +31,7 @@ export default function TeacherPortal({ setView }: Props) {
   const [practices, setPractices] = useState<Practice[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [loading, setLoading]     = useState(false)
+  const loadedOnce = useRef(false)
 
   useEffect(() => {
     auth.getSession().then(s => { setSession(s); setChecking(false) })
@@ -41,13 +42,14 @@ export default function TeacherPortal({ setView }: Props) {
   useEffect(() => { if (session) reload() }, [session])
 
   const reload = async () => {
-    setLoading(true)
+    if (!loadedOnce.current) setLoading(true)
     try {
       const [s, l, p, sub] = await Promise.all([
         db.students.getAll(), db.lessons.getAll(),
         db.practices.getAll(), db.submissions.getAll()
       ])
       setStudents(s); setLessons(l); setPractices(p); setSubmissions(sub)
+      loadedOnce.current = true
     } finally { setLoading(false) }
   }
 
@@ -57,6 +59,11 @@ export default function TeacherPortal({ setView }: Props) {
     try { await auth.signIn(email, password) }
     catch (_e) { setLoginErr('Credenciales incorrectas.') }
     finally { setLoggingIn(false) }
+  }
+
+  const handleSignOut = async () => {
+    await auth.signOut()
+    loadedOnce.current = false
   }
 
   if (checking) return <div className="portal-root flex-center"><Loader2 size={32} className="spin"/></div>
@@ -114,13 +121,13 @@ export default function TeacherPortal({ setView }: Props) {
               </button>
             ))}
           </div>
-          <button className="back-btn" onClick={() => auth.signOut()}><LogOut size={16}/> Salir</button>
+          <button className="back-btn" onClick={handleSignOut}><LogOut size={16}/> Salir</button>
         </div>
         {/* Mobile: fila 1 Inicio/Salir, fila 2 tabs */}
         <div className="ph-mobile">
           <div className="ph-mobile-top">
             <button className="back-btn" onClick={() => setView('landing')}><ArrowLeft size={16}/> Inicio</button>
-            <button className="back-btn" onClick={() => auth.signOut()}><LogOut size={16}/> Salir</button>
+            <button className="back-btn" onClick={handleSignOut}><LogOut size={16}/> Salir</button>
           </div>
           <div className="teacher-tabs ph-mobile-tabs">
             {([
@@ -243,7 +250,7 @@ function StudentsTab({ students, reload }: { students: Student[], reload: () => 
 }
 
 // ══════════════════════════════════════════════════════════════════
-// PRACTICES TAB (ahora con selector de lección)
+// PRACTICES TAB
 // ══════════════════════════════════════════════════════════════════
 function PracticesTab({ practices, students, lessons, reload }: { practices: Practice[], students: Student[], lessons: Lesson[], reload: () => void }) {
   const [showForm, setShowForm]           = useState(false)
@@ -356,7 +363,6 @@ function PracticesTab({ practices, students, lessons, reload }: { practices: Pra
               </select>
             </div>
 
-            {/* Lección asociada */}
             <div className="field full">
               <label>Lección asociada (opcional — el alumno la verá antes de responder)</label>
               <select value={form.lessonId} onChange={e => setForm(f => ({...f, lessonId: e.target.value}))}>

@@ -111,7 +111,7 @@ function AssignModal({ lesson, students, onClose, onSave }: {
 }
 
 // ── Componente para agrupar por materia ─────────────────────────
-function SubjectSection({ subject, lessons, students, onAssign, onToggleActive, onCreatePractice, onDelete }: {
+function SubjectSection({ subject, lessons, students, onAssign, onToggleActive, onCreatePractice, onDelete, onAddImages }: {
   subject: Subject
   lessons: Lesson[]
   students: Student[]
@@ -119,6 +119,7 @@ function SubjectSection({ subject, lessons, students, onAssign, onToggleActive, 
   onToggleActive: (lesson: Lesson) => void
   onCreatePractice: (lesson: Lesson) => void
   onDelete: (lesson: Lesson) => void
+  onAddImages: (lesson: Lesson, zip: File) => void
 }) {
   if (lessons.length === 0) return null
   
@@ -156,6 +157,13 @@ function SubjectSection({ subject, lessons, students, onAssign, onToggleActive, 
               <button className="btn-primary sm" onClick={() => onCreatePractice(l)}>
                 <Sparkles size={13}/> Crear práctica
               </button>
+              {l.examKey && (
+                <label className="btn-outline sm" style={{cursor:'pointer'}}>
+                  <ImageIcon size={13}/> Imágenes
+                  <input type="file" accept=".zip" style={{display:'none'}}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) onAddImages(l, f); e.target.value = '' }}/>
+                </label>
+              )}
               {l.fileUrl && (
                 <a href={l.fileUrl} target="_blank" rel="noreferrer" className="btn-outline sm">
                   <FileText size={13}/> Ver PDF
@@ -194,38 +202,6 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
   const progressRef = useRef<HTMLDivElement>(null)
   const lessonsRef = useRef(lessons)
   useEffect(() => { lessonsRef.current = lessons }, [lessons])
-
-  // ── Process Images ZIP ─────────────────────────────────────────
-  const processImagesZip = async (zipFile: File, examKey: string) => {
-    const zip = await JSZip.loadAsync(zipFile)
-    const images: { file: File, name: string, questionNum: number }[] = []
-    
-    for (const [relativePath, entry] of Object.entries(zip.files)) {
-      if (entry.dir) continue
-      const ext = relativePath.toLowerCase()
-      if (!ext.endsWith('.png') && !ext.endsWith('.jpg') && !ext.endsWith('.jpeg')) continue
-      
-      const blob = await entry.async('blob')
-      const fileName = relativePath.split('/').pop() || relativePath
-      const imgFile = new File([blob], fileName, { type: 'image/png' })
-      const questionNum = parseInt(fileName.match(/\d+/)?.[0] || '0')
-      
-      images.push({ file: imgFile, name: fileName, questionNum })
-    }
-    
-    for (const img of images) {
-      const { url } = await db.storage.uploadFile(img.file)
-      await qImages.add({
-        examKey,
-        fromQ: img.questionNum,
-        toQ: img.questionNum,
-        imageUrl: url,
-        imageName: img.name,
-      })
-    }
-    
-    return images.length
-  }
 
   // ── Process single PDF + Images ────────────────────────────────
   const handlePdf = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -277,20 +253,20 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
     setTimeout(() => progressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
 
     try {
-      // Subir PDF
       const res = await runUploadFiles([{ job, file }], examKey)
 
-      // Subir imágenes si hay ZIP
+      let imgMsg = ''
       if (imagesZip && res.done > 0) {
-        await processImagesZip(imagesZip, examKey)
+        const r = await qImages.importZip(imagesZip, examKey)
+        imgMsg = `\nImágenes: ${r.ok} subidas`
+        if (r.skipped.length) imgMsg += `\nSin número de pregunta reconocido: ${r.skipped.join(', ')}`
       }
 
       if (res.done > 0) {
-        alert(`✅ "${job.customTitle ?? job.name}" se guardó en la Biblioteca.${imagesZip ? '\nImágenes procesadas.' : ''}`)
+        alert(`✅ "${job.customTitle ?? job.name}" se guardó en la Biblioteca.${imgMsg}`)
       } else if (res.skipped > 0) {
-        alert(`⚠️ Ya existe un material con el archivo "${job.name}".\n\nNo se subió de nuevo porque ya está en tu Biblioteca. Si querés volver a subirlo, primero cambiá el nombre del archivo PDF (por ejemplo "${job.name.replace(/\.pdf$/i, '')}_v2.pdf").`)
+        alert(`⚠️ Ya existe un material con el archivo "${job.name}".\n\nSi querés volver a subirlo, cambiá el nombre del PDF (por ejemplo "${job.name.replace(/\.pdf$/i, '')}_v2.pdf").`)
       }
-      // si res.error > 0 ya se mostró el alert de error dentro de runUploadFiles
     } catch (err: any) {
       alert('Error inesperado:\n' + (err?.message ?? String(err)))
     }
@@ -328,7 +304,10 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
 
     for (let i = 0; i < updated.length; i++) {
       const j = updated[i]
-      const exists = lessons.some(l => l.fileName === j.name)
+      const jFolder  = j.path.split('/').slice(-2, -1)[0] ?? ''
+      const jBase    = j.name.replace(/\.pdf$/i, '')
+      const jExamKey = qImages.buildExamKey(`${jFolder}_${jBase}`)
+      const exists   = lessons.some(l => l.fileName === j.name && l.examKey === jExamKey)
       if (exists) { updated[i] = { ...j, status: 'skipped' }; setJobs([...updated]); continue }
 
       updated[i] = { ...j, status: 'uploading' }; setJobs([...updated])
@@ -337,9 +316,6 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
         const file    = new File([blob], j.name, { type: 'application/pdf' })
         const { url } = await db.storage.uploadFile(file)
 
-        const jFolder  = j.path.split('/').slice(-2, -1)[0] ?? ''
-        const jBase    = j.name.replace(/\.pdf$/i, '')
-        const jExamKey = qImages.buildExamKey(`${jFolder}_${jBase}`)
         await db.lessons.add({
           title:      friendlyTitle(j.path),
           subject:    j.subject,
@@ -402,7 +378,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
     return result
   }
 
-  // ── Toggle active + assign ─────────────────────────────────────
+  // ── Toggle active + assign + add images ────────────────────────
   const toggleActive = async (l: Lesson) => {
     await db.lessons.update({ ...l, isActive: !l.isActive }); reload()
   }
@@ -421,6 +397,13 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
     if (!assignTarget) return
     await db.lessons.update({ ...assignTarget, assignedTo: ids, isActive: ids.length > 0 })
     setAssignTarget(null); reload()
+  }
+
+  const addImages = async (l: Lesson, zip: File) => {
+    try {
+      const r = await qImages.importZip(zip, l.examKey!)
+      alert(`Imágenes: ${r.ok} subidas.` + (r.skipped.length ? `\nSin reconocer: ${r.skipped.join(', ')}` : ''))
+    } catch (e: any) { alert('Error subiendo imágenes:\n' + (e?.message ?? e)) }
   }
 
   // ── Filtered lessons ───────────────────────────────────────────
@@ -649,6 +632,7 @@ export default function LibraryTab({ lessons, students, reload }: Props) {
                 onToggleActive={toggleActive}
                 onCreatePractice={setCreateTarget}
                 onDelete={deleteLesson}
+                onAddImages={addImages}
               />
             ))}
           </div>

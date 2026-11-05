@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import JSZip from 'jszip'
 
 export type Subject = 'Matemáticas' | 'Español' | 'Ciencias' | 'Estudios Sociales' | 'Inglés'
 export type Grade   = '7° Grado' | '8° Grado' | '9° Grado' | '10° Grado' | '11° Grado' | 'Universitario' | 'Adulto'
@@ -144,6 +145,12 @@ export const db = {
       const { data } = await supabase.from('submissions').select('id').eq('student_id', studentId).eq('practice_id', practiceId).maybeSingle()
       return !!data
     },
+    async doneIds(studentId: string): Promise<string[]> {
+      const { data, error } = await supabase.from('submissions')
+        .select('practice_id').eq('student_id', studentId)
+      if (error) throw error
+      return (data ?? []).map((r: any) => r.practice_id)
+    },
   },
 
   storage: {
@@ -193,7 +200,6 @@ const toQImage = (r: any): QuestionImage => ({
 // Add to db object — extend at runtime
 export const qImages = {
   async add(q: Omit<QuestionImage, 'id'|'createdAt'>): Promise<QuestionImage> {
-    const { supabase } = await import('./supabase')
     const { data, error } = await supabase.from('question_images')
       .insert({ exam_key: q.examKey, from_q: q.fromQ, to_q: q.toQ, image_url: q.imageUrl, image_name: q.imageName })
       .select().single()
@@ -201,16 +207,45 @@ export const qImages = {
   },
 
   async forExam(examKey: string): Promise<QuestionImage[]> {
-    const { supabase } = await import('./supabase')
     const { data, error } = await supabase.from('question_images')
       .select('*').eq('exam_key', examKey)
     if (error) throw error; return (data ?? []).map(toQImage)
   },
 
   async deleteForExam(examKey: string) {
-    const { supabase } = await import('./supabase')
     const { error } = await supabase.from('question_images').delete().eq('exam_key', examKey)
     if (error) throw error
+  },
+
+  async importZip(zipFile: File, examKey: string): Promise<{ ok: number; skipped: string[] }> {
+    const MIME: Record<string, string> = {
+      png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp',
+    }
+    const zip = await JSZip.loadAsync(zipFile)
+    await qImages.deleteForExam(examKey)            // evita duplicados al reimportar
+
+    const skipped: string[] = []
+    let ok = 0
+
+    for (const [path, entry] of Object.entries(zip.files)) {
+      if (entry.dir || path.includes('__MACOSX')) continue
+      const name = path.split('/').pop() ?? path
+      const ext  = name.split('.').pop()?.toLowerCase() ?? ''
+      if (name.startsWith('.') || !MIME[ext]) continue
+
+      const base  = name.replace(/\.[^.]+$/, '')
+      const lead  = /^(\d+)/.exec(base)
+      const range = qImages.parseRange(base) ?? (lead ? { from: +lead[1], to: +lead[1] } : null)
+      if (!range) { skipped.push(name); continue }
+
+      const blob = await entry.async('blob')
+      const { url } = await db.storage.uploadFile(new File([blob], name, { type: MIME[ext] }))
+      await qImages.add({
+        examKey, fromQ: range.from, toQ: range.to, imageUrl: url, imageName: name,
+      })
+      ok++
+    }
+    return { ok, skipped }
   },
 
   // Find image that covers question number N

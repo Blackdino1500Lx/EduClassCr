@@ -16,36 +16,32 @@ export async function extractTextFromFile(file: File): Promise<string> {
 }
 
 async function extractTextFromBuffer(buffer: ArrayBuffer): Promise<string> {
-  const pdf    = await pdfjsLib.getDocument({ data: buffer }).promise
-
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
   let fullText = ''
-  
+
   for (let i = 1; i <= pdf.numPages; i++) {
     const page    = await pdf.getPage(i)
     const content = await page.getTextContent()
-    
-    // Group items by line using y-coordinate
-    // Items with same y (within 2px) are on the same line
-    const lineMap = new Map<number, string[]>()
-    
+
+    const lines: { y: number; items: any[] }[] = []
     for (const item of content.items as any[]) {
       if (!item.str?.trim()) continue
-      const y = Math.round(item.transform[5])
-      if (!lineMap.has(y)) lineMap.set(y, [])
-      lineMap.get(y)!.push(item.str)
+      const y = item.transform[5]
+      let line = lines.find(l => Math.abs(l.y - y) <= 3)   // tolerancia de 3 px
+      if (!line) { line = { y, items: [] }; lines.push(line) }
+      line.items.push(item)
     }
-    
-    // Sort lines by y descending (top to bottom on page)
-    const sortedYs = Array.from(lineMap.keys()).sort((a, b) => b - a)
-    
-    for (const y of sortedYs) {
-      const lineText = lineMap.get(y)!.join(' ').trim()
-      if (lineText) fullText += lineText + '\n'
+
+    lines.sort((a, b) => b.y - a.y)                          // arriba -> abajo
+    for (const l of lines) {
+      l.items.sort((a, b) => a.transform[4] - b.transform[4]) // izquierda -> derecha
+      const text = l.items.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim()
+      if (text) fullText += text + '\n'
     }
-    
     fullText += '\n'
   }
-  
+
+  await pdf.destroy()
   return fullText.trim()
 }
 

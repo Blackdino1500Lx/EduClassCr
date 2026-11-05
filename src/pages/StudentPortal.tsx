@@ -23,7 +23,8 @@ function SecureTextarea({ value, onChange, isMath, placeholder, flagsRef }: {
   isMath: boolean; placeholder?: string; flagsRef: React.MutableRefObject<string[]>
 }) {
   const lastLen = useRef(0)
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     if (!isMath) return
     const text = e.clipboardData.getData('text')
     if (text.length > 20) {
@@ -33,11 +34,20 @@ function SecureTextarea({ value, onChange, isMath, placeholder, flagsRef }: {
     }
   }, [isMath, flagsRef])
 
+  // FIX: handler nombrado con tipo explícito (el ternario inline rompía la inferencia)
+  const handleContextMenu = (e: React.MouseEvent<HTMLTextAreaElement>) => {
+    if (isMath) e.preventDefault()
+  }
+
   return (
     <div className="relative">
-      <textarea className="secure-textarea" value={value} placeholder={placeholder} rows={5}
+      <textarea
+        className="secure-textarea"
+        value={value}
+        placeholder={placeholder}
+        rows={5}
         onPaste={handlePaste}
-        onContextMenu={isMath ? e => e.preventDefault() : undefined}
+        onContextMenu={handleContextMenu}
         onChange={e => {
           if (isMath) {
             const diff = e.target.value.length - lastLen.current
@@ -45,7 +55,8 @@ function SecureTextarea({ value, onChange, isMath, placeholder, flagsRef }: {
             lastLen.current = e.target.value.length
           }
           onChange(e.target.value)
-        }}/>
+        }}
+      />
       {isMath && <div className="anti-cheat-badge"><Lock size={11}/><span>Modo seguro activo</span></div>}
     </div>
   )
@@ -69,14 +80,11 @@ export default function StudentPortal({ setView, student: studentProp, onLogout 
   const [lessonExpanded, setLessonExpanded] = useState(true)
   const flagsRef = useRef<string[]>([])
 
-  // If pre-authenticated via StudentLogin, load data on mount
   useEffect(() => {
     if (studentProp) {
       db.practices.forStudent(studentProp.id).then(setPractices)
       db.lessons.forStudent(studentProp.id).then(setLessons)
-      db.submissions.getAll().then(subs => {
-        setSubmittedIds(new Set(subs.filter(s => s.studentId === studentProp.id).map(s => s.practiceId)))
-      })
+      db.submissions.doneIds(studentProp.id).then(ids => setSubmittedIds(new Set(ids)))
     }
   }, [studentProp?.id])
 
@@ -86,12 +94,12 @@ export default function StudentPortal({ setView, student: studentProp, onLogout 
     try {
       const found = await db.students.findByPin(pin)
       if (!found) { setLoginErr('PIN incorrecto. Consultá con tu tutora.'); return }
-      const [assigned, allLessons, allSubs] = await Promise.all([
+      const [assigned, allLessons, doneIds] = await Promise.all([
         db.practices.forStudent(found.id),
         db.lessons.forStudent(found.id),
-        db.submissions.getAll(),
+        db.submissions.doneIds(found.id),
       ])
-      const doneSet = new Set(allSubs.filter(s => s.studentId === found.id).map(s => s.practiceId))
+      const doneSet = new Set(doneIds)
       setStudent(found); setPractices(assigned); setLessons(allLessons); setSubmittedIds(doneSet); setScreen('home')
     } catch (_e) { setLoginErr('Error de conexión. Intentá de nuevo.') }
     finally { setLoggingIn(false) }
@@ -109,16 +117,19 @@ export default function StudentPortal({ setView, student: studentProp, onLogout 
   const handleSubmit = async () => {
     if (!activePractice || !student) return
     const unanswered = activePractice.questions.filter(q => {
-      if (q.hasSandbox) return (!answers[q.id] || answers[q.id] === '') && !canvasImages[q.id]
-      return answers[q.id] === undefined || answers[q.id] === ''
+      const answered  = answers[q.id] !== undefined && answers[q.id] !== ''
+      const hasCanvas = !!canvasImages[q.id]
+      return !answered && !hasCanvas
     })
     if (unanswered.length > 0) { alert(`Faltan ${unanswered.length} pregunta(s) por responder.`); return }
-    const isMath = activePractice.subject === 'Matemáticas'
-    let autoScore: number | undefined = undefined
-    if (!isMath) {
-      autoScore = 0
-      activePractice.questions.forEach(q => { if (q.type === 'multiple' && answers[q.id] === q.correctOption) autoScore! += q.points })
-    }
+
+    const hasOpen    = activePractice.questions.some(q => q.type === 'open')
+    const hasSandbox = activePractice.questions.some(q => q.hasSandbox)
+    let autoScore = 0
+    activePractice.questions.forEach(q => {
+      if (q.type === 'multiple' && answers[q.id] === q.correctOption) autoScore += q.points
+    })
+
     setSubmitting(true)
     try {
       await db.submissions.add({
@@ -128,7 +139,9 @@ export default function StudentPortal({ setView, student: studentProp, onLogout 
           value: answers[q.id] ?? '',
           canvasImage: q.hasSandbox ? (canvasImages[q.id] ?? undefined) : undefined,
         })),
-        score: autoScore, reviewed: !isMath, antiCheatFlags: flagsRef.current, teacherNote: undefined,
+        score: hasOpen ? undefined : autoScore,
+        reviewed: !hasOpen && !hasSandbox,
+        antiCheatFlags: flagsRef.current, teacherNote: undefined,
       })
       setSubmittedIds(prev => new Set([...prev, activePractice.id]))
       setSubmitted(true)
@@ -169,7 +182,6 @@ export default function StudentPortal({ setView, student: studentProp, onLogout 
         <div className="student-chip">{student.firstName} {student.lastName} · {student.grade} · {student.level}</div>
       </div>
       <div className="portal-content">
-        {/* Lecciones disponibles sin práctica */}
         {lessons.filter(l => !practices.some(p => p.lessonId === l.id)).length > 0 && (
           <div style={{marginBottom:28}}>
             <h3 style={{fontFamily:'Fraunces,serif', fontSize:20, marginBottom:12}}>Material de estudio</h3>
@@ -287,6 +299,9 @@ export default function StudentPortal({ setView, student: studentProp, onLogout 
   // ── PRACTICE ─────────────────────────────────────────────────────
   if (screen === 'practice' && activePractice && student) {
     const isMath = activePractice.subject === 'Matemáticas'
+    const answeredCount = activePractice.questions.filter(q =>
+      (answers[q.id] !== undefined && answers[q.id] !== '') || !!canvasImages[q.id]
+    ).length
 
     if (submitted) return (
       <div className="portal-root">
@@ -363,7 +378,7 @@ export default function StudentPortal({ setView, student: studentProp, onLogout 
             ))}
           </div>
           <div className="submit-row">
-            <span className="answered-count">{Object.keys(answers).length} / {activePractice.questions.length} respondidas</span>
+            <span className="answered-count">{answeredCount} / {activePractice.questions.length} respondidas</span>
             <button className="btn-submit" onClick={handleSubmit} disabled={submitting}>
               {submitting ? <><Loader2 size={15} className="spin"/> Entregando...</> : <><Send size={16}/> Entregar práctica</>}
             </button>

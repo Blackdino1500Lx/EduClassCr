@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { Lesson, Student, Question, Subject } from '../lib/data'
 import { db, qImages } from '../lib/data'
 import { extractTextFromUrl, extractTextFromFile } from '../lib/pdfExtract'
@@ -8,9 +8,9 @@ import { X, Loader2, AlertTriangle, Check, Trash2, Plus, Edit3, Image } from 'lu
 const SUBJECTS: Subject[] = ['Matemáticas', 'Español', 'Ciencias', 'Estudios Sociales', 'Inglés']
 
 interface Props {
-  lesson?: Lesson          // crear desde una lección ya subida
-  file?: File              // crear desde un PDF recién subido
-  initialSubject?: Subject // materia por defecto cuando se sube un PDF nuevo
+  lesson?: Lesson
+  file?: File
+  initialSubject?: Subject
   students: Student[]
   onClose: () => void; onSaved: () => void
 }
@@ -34,14 +34,18 @@ export default function CreatePracticeModal({ lesson, file, initialSubject, stud
   const [dueDate, setDueDate]         = useState('')
   const [assignedTo, setAssignedTo]   = useState<string[]>([])
   const [uploadingImg, setUploadingImg] = useState<string | null>(null)
+  const [answered, setAnswered]       = useState<Set<string>>(new Set())
 
-  // Ejecutar la extracción una sola vez al montar el modal.
-  useEffect(() => { startProcess() }, [])
+  const started = useRef(false)
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
+    startProcess()
+  }, [])
 
   async function startProcess() {
     setStep('extracting'); setError('')
     try {
-      // Step 1: Extract text from PDF (desde lección subida o archivo nuevo)
       setProgress('Extrayendo texto del PDF...')
       let pdfText = ''
       if (file) {
@@ -55,14 +59,12 @@ export default function CreatePracticeModal({ lesson, file, initialSubject, stud
         throw new Error('No se pudo extraer texto del PDF. ¿Es un PDF escaneado (solo imágenes)? Probá crear la práctica de forma manual.')
       }
 
-      // Step 2: Parse questions with regex (ZERO AI cost, instant)
       setProgress('Parseando preguntas...')
       const parsed = parseQuestionsFromText(pdfText)
       if (parsed.length === 0) {
         throw new Error('No se encontraron preguntas en el PDF. Podés agregarlas manualmente con el botón "Agregar".')
       }
 
-      // Step 3: Load matching images from question_images table (solo si viene de una lección)
       let imgs: Awaited<ReturnType<typeof qImages.forExam>> = []
       if (lesson) {
         setProgress('Buscando imágenes...')
@@ -71,11 +73,11 @@ export default function CreatePracticeModal({ lesson, file, initialSubject, stud
         )
         try {
           imgs = await qImages.forExam(examKey)
-        } catch (_e) {
+        } catch (e) {
+          console.error('No se pudieron cargar imágenes:', e)
         }
       }
 
-      // Step 4: Build Question objects with auto-attached images
       const isMath = subject === 'Matemáticas'
       const qs: Question[] = parsed.map(p => {
         const img = qImages.findForQuestion(imgs, p.num)
@@ -125,6 +127,19 @@ export default function CreatePracticeModal({ lesson, file, initialSubject, stud
     if (!title.trim())           { alert('El título es requerido'); return }
     if (questions.length === 0)  { alert('Necesitás al menos una pregunta'); return }
     if (assignedTo.length === 0) { alert('Asigná a al menos un alumno'); return }
+
+    const bad = questions.find(q =>
+      !q.text.trim() ||
+      (q.type === 'multiple' && (q.options?.filter(o => o.trim()).length ?? 0) < 2)
+    )
+    if (bad) {
+      alert(`La pregunta "${bad.text.slice(0, 40)}…" tiene enunciado u opciones vacías. Editala o eliminala.`)
+      return
+    }
+
+    const missing = questions.filter(q => q.type === 'multiple' && !answered.has(q.id))
+    if (missing.length && !confirm(`${missing.length} pregunta(s) no tienen la respuesta correcta confirmada (quedarán con A). ¿Guardar igual?`)) return
+
     setStep('saving')
     try {
       await db.practices.add({
@@ -186,7 +201,6 @@ export default function CreatePracticeModal({ lesson, file, initialSubject, stud
         {step === 'review' && (
           <>
             <div className="modal-body">
-              {/* Metadata */}
               <div className="create-practice-meta">
                 <div className="field full"><label>Título</label>
                   <input value={title} onChange={e => setTitle(e.target.value)}/>
@@ -204,7 +218,6 @@ export default function CreatePracticeModal({ lesson, file, initialSubject, stud
                 </div>
               </div>
 
-              {/* Assign */}
               <div className="field full" style={{marginBottom:20}}>
                 <label>Asignar a alumnos</label>
                 <div className="assign-grid">
@@ -223,7 +236,6 @@ export default function CreatePracticeModal({ lesson, file, initialSubject, stud
                 </div>
               </div>
 
-              {/* Summary banner */}
               <div className="ai-generated-banner">
                 <Check size={14} style={{color:'var(--success)'}}/>
                 <span>
@@ -233,7 +245,6 @@ export default function CreatePracticeModal({ lesson, file, initialSubject, stud
                 <button className="btn-outline sm" onClick={addQ}><Plus size={12}/> Agregar</button>
               </div>
 
-              {/* Questions */}
               <div className="questions-list" style={{marginTop:12}}>
                 {questions.map((q, idx) => (
                   <div className="question-card" key={q.id}>
@@ -264,7 +275,6 @@ export default function CreatePracticeModal({ lesson, file, initialSubject, stud
                       </div>
                     )}
 
-                    {/* Sandbox toggle — siempre visible */}
                     <label className="sandbox-toggle-label" style={{marginTop:8}}>
                       <input type="checkbox" checked={q.hasSandbox ?? false}
                         onChange={e => updateQ(q.id, { hasSandbox: e.target.checked })}/>
@@ -280,7 +290,7 @@ export default function CreatePracticeModal({ lesson, file, initialSubject, stud
                             {q.options.map((opt,oi) => (
                               <div key={oi} className="opt-row">
                                 <input type="radio" name={`correct-${q.id}`} checked={q.correctOption===oi}
-                                  onChange={() => updateQ(q.id,{correctOption:oi})}/>
+                                  onChange={() => { updateQ(q.id,{correctOption:oi}); setAnswered(s => new Set(s).add(q.id)) }}/>
                                 <span className="opt-letter">{String.fromCharCode(65+oi)}</span>
                                 <input type="text" value={opt}
                                   onChange={e => { const opts=[...(q.options??[])]; opts[oi]=e.target.value; updateQ(q.id,{options:opts}) }}/>
@@ -296,6 +306,9 @@ export default function CreatePracticeModal({ lesson, file, initialSubject, stud
                     ) : (
                       <>
                         <p className="q-text">{q.text || <em style={{color:'var(--muted)'}}>Sin enunciado</em>}</p>
+                        {q.type==='multiple' && !answered.has(q.id) && (
+                          <p className="hint-text" style={{color:'var(--warning)'}}>⚠ Respuesta correcta sin confirmar (por defecto A)</p>
+                        )}
                         {q.type==='multiple' && q.options && (
                           <div className="options-list" style={{pointerEvents:'none'}}>
                             {q.options.map((opt,oi) => (

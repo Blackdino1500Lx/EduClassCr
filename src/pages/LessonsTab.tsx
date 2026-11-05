@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import JSZip from 'jszip'
+import type { ChangeEvent } from 'react'
 import type { Lesson, Student, Subject } from '../lib/data'
 import { db, qImages } from '../lib/data'
 import CreatePracticeModal from './CreatePracticeModal'
@@ -15,18 +15,17 @@ function ytEmbed(url: string): string | null {
 }
 
 // ── Componente para agrupar por materia ─────────────────────────
-function SubjectSection({ subject, lessons, students, onToggleActive, onRemove, onCreatePractice }: {
+function SubjectSection({ subject, lessons, onToggleActive, onRemove, onCreatePractice }: {
   subject: Subject
   lessons: Lesson[]
-  students: Student[]
   onToggleActive: (lesson: Lesson) => void
   onRemove: (id: string) => void
   onCreatePractice: (lesson: Lesson) => void
 }) {
   const [expanded, setExpanded] = useState<string | null>(null)
-  
+
   if (lessons.length === 0) return null
-  
+
   return (
     <div className="subject-section">
       <div className="subject-header">
@@ -62,7 +61,7 @@ function SubjectSection({ subject, lessons, students, onToggleActive, onRemove, 
                 <Trash2 size={13}/> Eliminar
               </button>
             </div>
-            
+
             {expanded === l.id && (
               <div className="lesson-expanded" style={{marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0'}}>
                 {l.content && <p className="lesson-content" style={{fontSize: '0.875rem', marginBottom: '0.75rem'}}>{l.content}</p>}
@@ -80,9 +79,9 @@ function SubjectSection({ subject, lessons, students, onToggleActive, onRemove, 
                 )}
               </div>
             )}
-            
-            <button 
-              className="view-details-btn" 
+
+            <button
+              className="view-details-btn"
               onClick={() => setExpanded(expanded === l.id ? null : l.id)}
               style={{
                 marginTop: '0.75rem',
@@ -120,7 +119,7 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
     assignedTo: [] as string[], isActive: true,
   })
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true); setErr('')
@@ -131,60 +130,30 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
     finally { setUploading(false) }
   }
 
-  const handleImagesZip = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImagesZip = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setPendingImagesZip(file)
     e.target.value = ''
   }
 
-  const processImagesZip = async (zipFile: File, examKey: string) => {
-    const zip = await JSZip.loadAsync(zipFile)
-    const images: { file: File, name: string, questionNum: number }[] = []
-    
-    for (const [relativePath, entry] of Object.entries(zip.files)) {
-      if (entry.dir) continue
-      const ext = relativePath.toLowerCase()
-      if (!ext.endsWith('.png') && !ext.endsWith('.jpg') && !ext.endsWith('.jpeg')) continue
-      
-      const blob = await entry.async('blob')
-      const fileName = relativePath.split('/').pop() || relativePath
-      const imgFile = new File([blob], fileName, { type: 'image/png' })
-      const questionNum = parseInt(fileName.match(/\d+/)?.[0] || '0')
-      
-      images.push({ file: imgFile, name: fileName, questionNum })
-    }
-    
-    for (const img of images) {
-      const { url } = await db.storage.uploadFile(img.file)
-      await qImages.add({
-        examKey,
-        fromQ: img.questionNum,
-        toQ: img.questionNum,
-        imageUrl: url,
-        imageName: img.name,
-      })
-    }
-    
-    return images.length
-  }
-
   const save = async () => {
     if (!form.title.trim())           { setErr('El título es requerido'); return }
     if (form.assignedTo.length === 0) { setErr('Asigná a al menos un alumno'); return }
     if (!form.content && !form.fileUrl && !form.youtubeUrl) { setErr('Agregá contenido: texto, documento o video'); return }
-    
+
     setSaving(true); setErr('')
     try {
       const examKey = qImages.buildExamKey(form.title.replace(/[^a-zA-Z0-9]/g, '_'))
-      
+
       await db.lessons.add({ ...form, examKey })
-      
+
       if (pendingImagesZip) {
-        await processImagesZip(pendingImagesZip, examKey)
+        const r = await qImages.importZip(pendingImagesZip, examKey)
+        if (r.skipped.length) alert(`Imágenes sin número reconocido: ${r.skipped.join(', ')}`)
         setPendingImagesZip(null)
       }
-      
+
       await reload()
       setShowForm(false)
       setForm({ title: '', subject: SUBJECTS[0], content: '', youtubeUrl: '', fileUrl: '', fileName: '', assignedTo: [], isActive: true })
@@ -256,7 +225,7 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
             <div className="field full">
               <label>📷 ZIP de imágenes (opcional)</label>
               <div className="image-zip-upload">
-                <button 
+                <button
                   type="button"
                   className="btn-outline"
                   onClick={() => imagesZipRef.current?.click()}
@@ -268,11 +237,11 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
                     ✅ {pendingImagesZip.name}
                   </span>
                 )}
-                <input 
-                  ref={imagesZipRef} 
-                  type="file" 
-                  accept=".zip" 
-                  style={{display:'none'}} 
+                <input
+                  ref={imagesZipRef}
+                  type="file"
+                  accept=".zip"
+                  style={{display:'none'}}
                   onChange={handleImagesZip}
                 />
               </div>
@@ -319,9 +288,9 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
 
           {err && <div className="error-msg"><AlertTriangle size={13}/> {err}</div>}
           <div className="form-actions">
-            <button className="btn-outline" onClick={() => { 
-              setShowForm(false); 
-              setErr(''); 
+            <button className="btn-outline" onClick={() => {
+              setShowForm(false);
+              setErr('');
               setPendingImagesZip(null);
             }}>Cancelar</button>
             <button className="btn-primary" onClick={save} disabled={saving}>
@@ -331,7 +300,7 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
         </div>
       )}
 
-      {lessons.length === 0 
+      {lessons.length === 0
         ? <p className="empty-hint">No hay lecciones aún. Creá una nueva lección para empezar.</p>
         : (
           <div className="subjects-container">
@@ -340,7 +309,6 @@ export default function LessonsTab({ lessons, students, reload }: Props) {
                 key={subject}
                 subject={subject}
                 lessons={subjectLessons}
-                students={students}
                 onToggleActive={toggleActive}
                 onRemove={remove}
                 onCreatePractice={setCreateTarget}
